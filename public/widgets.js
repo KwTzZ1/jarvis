@@ -164,6 +164,7 @@ const WIDGET_TYPES = {
   system: { title: "Système", icon: "server", size: "s", render: renderSystemWidget },
   notes: { title: "Bloc-notes", icon: "edit", size: "m", render: renderNotesWidget },
   remote: { title: "Télécommande PC", icon: "zap", size: "m", render: renderRemoteWidget },
+  apps: { title: "Applis", icon: "grid", size: "l", render: renderAppsWidget },
 };
 const SIZES = ["s", "m", "t", "l"];
 const SIZE_LABELS = { s: "petit", m: "large", t: "haut", l: "grand" };
@@ -541,6 +542,45 @@ setInterval(() => {
 }, 3000);
 
 // Télécommande : son, lecture, verrouillage, presse-papiers et liens envoyés au PC (pratique depuis le téléphone).
+// Lanceur d'applis : les icônes viennent des programmes installés ; un clic ouvre l'appli sur le PC.
+function renderAppsWidget(body) {
+  if (body.querySelector(".apps")) return;
+  const box = el("div", "apps");
+  body.append(box);
+  api("/api/apps")
+    .then(({ apps }) => {
+      for (const a of apps.filter((x) => x.installed)) {
+        const b = el("button", "app-tile");
+        b.type = "button";
+        b.title = `Ouvrir ${a.label}`;
+        const ic = el("span", "app-ic");
+        const letter = () => {
+          const b0 = el("b", null, a.id === "capture" ? "" : a.label[0]);
+          if (a.id === "capture") b0.append(iconEl("image", 20));
+          return b0;
+        };
+        if (a.icon) {
+          const img = el("img");
+          img.src = a.icon;
+          img.alt = "";
+          img.onerror = () => img.replaceWith(letter());
+          ic.append(img);
+        } else ic.append(letter());
+        const SHORT = { parametres: "Réglages", calculatrice: "Calculette", blocnotes: "Bloc-notes", explorateur: "Fichiers", taches: "Tâches", capture: "Capture", epic: "Epic" };
+        b.append(ic, el("span", "app-name", SHORT[a.id] || a.label));
+        b.onclick = () => {
+          b.classList.remove("launch");
+          void b.offsetWidth;
+          b.classList.add("launch");
+          window.sfx?.("launch");
+          api(`/api/app/${a.id}`, { method: "POST" }).catch((e) => toast(e.message, true));
+        };
+        box.append(b);
+      }
+    })
+    .catch((e) => box.append(el("p", "empty", e.message)));
+}
+
 function renderRemoteWidget(body) {
   if (body.querySelector(".rmt")) return;
   const box = el("div", "rmt");

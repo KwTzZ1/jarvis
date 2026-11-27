@@ -74,7 +74,24 @@
   new ResizeObserver(resize).observe(canvas);
 
   // Bleu au repos, cyan à l'écoute, bleu profond en réflexion, VIOLET MAUVE quand il parle.
-  const COLORS = { idle: [95, 195, 255], listening: [120, 232, 255], thinking: [105, 150, 255], speaking: [182, 104, 255], offline: [110, 125, 140] };
+  // Thèmes de couleur : repos, écoute, réflexion, parole. Toute l'interface suit la couleur de la sphère.
+  const THEMES = {
+    jarvis: { idle: [95, 195, 255], listening: [120, 232, 255], thinking: [105, 150, 255], speaking: [182, 104, 255] },
+    mark: { idle: [255, 84, 66], listening: [255, 190, 90], thinking: [255, 128, 64], speaking: [255, 204, 112] },
+    emeraude: { idle: [52, 222, 158], listening: [136, 255, 208], thinking: [64, 196, 190], speaking: [186, 255, 120] },
+    glace: { idle: [186, 218, 255], listening: [228, 244, 255], thinking: [150, 186, 255], speaking: [255, 255, 255] },
+    nebuleuse: { idle: [234, 104, 214], listening: [255, 156, 236], thinking: [172, 116, 255], speaking: [255, 140, 170] },
+  };
+  let COLORS;
+  window.jarvisCore.themes = THEMES;
+  window.jarvisCore.setTheme = (name) => {
+    const id = THEMES[name] ? name : "jarvis";
+    COLORS = { ...THEMES[id], offline: [110, 125, 140] };
+    document.documentElement.dataset.theme = id;
+    localStorage.setItem("jarvisTheme", id);
+  };
+  window.jarvisCore.setTheme(localStorage.getItem("jarvisTheme"));
+  document.documentElement.style.setProperty("--core-rgb", COLORS.idle.join(","));
   const mode = () => {
     const c = reactor.classList;
     if (c.contains("offline")) return "offline";
@@ -83,7 +100,7 @@
   };
   const isMini = () => !!document.body.dataset.page && document.body.dataset.page !== "0";
 
-  let energy = 0.2, spin = 0, color = [95, 195, 255], skip = false, frameNo = 0, lastRgb = "", lvl = 0, emitA = 0, fAmt = 0, fx = 1, fy = 0;
+  let energy = 0.2, spin = 0, color = [...COLORS.idle], skip = false, frameNo = 0, lastRgb = "", lvl = 0, emitA = 0, fAmt = 0, fx = 1, fy = 0;
   const tips = [];
   const buf = new Uint8Array(128);
   function voiceLevel() {

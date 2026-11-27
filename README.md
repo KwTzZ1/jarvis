@@ -202,6 +202,9 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 - **En discussion**, la sphère se fait petite en haut et la conversation prend la place ; au bout de 2 minutes sans échange, elle reprend sa place au centre avec l'heure.
 - **Sur les autres onglets**, elle se réduit en bas à droite : un clic dessus ramène à l'Assistant.
 - **Autour de la sphère, six points sur l'état du PC** : processeur, carte graphique, mémoire, disque, réseau et système, avec leur valeur en direct. Passe la souris sur un point : une fiche détaillée s'ouvre (modèle, utilisation et sa courbe, fréquence, température, mémoire vidéo, ventilateur, programmes qui prennent le plus de mémoire, place libre, débit…) et la sphère s'illumine de ce côté. Un clic épingle la fiche (avec un raccourci vers le Gestionnaire des tâches), Échap la ferme. Un point passe au rouge si ça chauffe ou sature. Les relevés ne tournent que quand les points sont à l'écran.
+- **Anneaux autour de la sphère** : un minuteur en cours dessine un anneau lumineux qui se vide (avec le temps restant sous « JARVIS », pulsation dans les 10 dernières secondes, clignotement à la fin) ; la musique qui joue dessine un anneau blanc qui avance avec le morceau. Ils restent visibles sur la mini-sphère des autres onglets.
+- **Thèmes de couleur** (Réglages → Personnalisation) : Jarvis (bleu), Mark (rouge et or), Émeraude, Glace, Nébuleuse. Un clic sur une pastille montre tout de suite le résultat ; « Enregistrer » le garde.
+- **Sons d'interface** : petits bips discrets (notifications, erreurs, écoute, réponse, ouverture de l'aperçu, lancement d'une appli, survol des points du PC). Réglages → Personnalisation → Sons de l'interface pour les couper.
 - **Température du processeur** : Windows ne la donne pas. Lance [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (gratuit, en administrateur) et Jarvis l'affiche tout seul. Celle de la carte graphique NVIDIA est lue directement.
 - **Ligne d'infos** sous la barre du haut : météo, prochain rendez-vous, mails non lus, musique en cours. Un clic (ou le bouton ☰ en haut à gauche) ouvre l'**Aperçu** avec tout le détail (agenda, mails, tâches, minuteurs, mémoire, connexions).
 
@@ -223,6 +226,7 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
   - **Spotify (recherche)** : cherche un titre, ▶ pour l'écouter, + pour l'ajouter à une de tes playlists ou en créer une nouvelle (la première fois : Réglages → Spotify → Déconnecter puis Connecter, pour donner l'autorisation de modifier tes playlists) ;
   - **Système** : processeur, mémoire et disque en direct (barre rouge au-delà de 85 %) ;
   - **Bloc-notes** : tes notes, enregistrées automatiquement sur ce PC ;
+  - **Applis** : tes applis (Discord, Steam, Spotify, Epic, Réglages, Calculette, Fichiers, Tâches…) avec leurs vraies icônes ; un clic les ouvre sur le PC, même depuis le téléphone. Seules celles qui sont installées s'affichent ;
   - Discord : messages du salon mis à jour toutes les 5 secondes, avec avatars ; les nouveaux s'allument ;
   - Mails : expéditeur, heure, objet et début du message ;
   - le reste se met à jour toutes les minutes tant que la page Widgets est ouverte.
@@ -244,6 +248,7 @@ Jarvis consomme peu quand il ne sert pas :
 - dans l'onglet Web, un seul site est actif à la fois : les autres onglets se rechargent quand on revient dessus.
 
 **Raccourcis :**
+- **Ctrl + Espace depuis n'importe quelle appli** : la fenêtre Jarvis passe devant et t'écoute (Réglages → Personnalisation → Raccourci pour parler, pour en choisir un autre ou le couper) ;
 - maintiens **Espace**, ou clique sur le réacteur, pour parler ;
 - l'icône **ondes** active l'écoute permanente ;
 - l'icône **haut-parleur** coupe ou remet la voix.

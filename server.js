@@ -1,5 +1,5 @@
 import { synthesize, piperVoices } from "./lib/tts.js";
-import { systemInfo, pcControl, PC_ACTIONS, setClipboard, getClipboard, openApp, APP_IDS } from "./lib/system.js";
+import { systemInfo, pcControl, PC_ACTIONS, setClipboard, getClipboard, openApp, APP_IDS, appList, appIconPath } from "./lib/system.js";
 import { hardware } from "./lib/hardware.js";
 import { PHONE_PORT, checkToken, phoneInfo, resetPhoneToken, updatePhoneServer } from "./lib/phone.js";
 import "./lib/boot.js";
@@ -29,7 +29,7 @@ app.disable("x-powered-by");
 // n'est pas la nôtre : un site web malveillant ne peut pas s'en servir pour lire tes mails.
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 // Accès téléphone (port à part, réseau local) : il faut la clé secrète, reçue via le QR code.
-const PHONE_BLOCKED = /^\/(api\/settings|api\/phone|auth\/)/;
+const PHONE_BLOCKED = /^\/(api\/settings|api\/phone|api\/events|api\/hotkey|auth\/)/;
 app.use((req, res, next) => {
   if (req.socket.localPort !== PHONE_PORT) return next();
   const cookie = /(?:^|;\s*)jarvis_k=([a-f0-9]+)/.exec(req.headers.cookie || "")?.[1];
@@ -84,6 +84,8 @@ function status() {
     providerPref: process.env.AI_PROVIDER || "auto",
     webEngine: process.env.WEB_ENGINE || "google",
     uiSounds: process.env.UI_SOUNDS !== "false",
+    theme: process.env.THEME || "jarvis",
+    hotkey: process.env.HOTKEY || "ctrl+space",
     youtube: youtubeConfigured(),
     piper: piperVoices(),
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
@@ -104,6 +106,31 @@ app.get("/api/status", (req, res) => res.json(status()));
 app.get("/api/system", wrap(async (req, res) => res.json(await systemInfo())));
 // Détail du PC pour les points autour de la sphère (relevés actifs seulement tant qu'on les demande).
 app.get("/api/hardware", wrap(async (req, res) => res.json(await hardware())));
+// Lanceur d'applis : liste (avec les vraies icônes) et icônes.
+app.get("/api/apps", wrap(async (req, res) => res.json({ apps: await appList() })));
+app.get("/api/app-icon/:id", (req, res) => {
+  const p = appIconPath(req.params.id);
+  if (!p) return res.status(404).end();
+  res.sendFile(p, { maxAge: 86_400_000 }, (err) => err && !res.headersSent && res.status(404).end());
+});
+// Raccourci clavier global : le lanceur Windows appelle /api/hotkey, la fenêtre (abonnée à /api/events) se met à écouter.
+const eventClients = new Set();
+let listenAt = 0;
+app.get("/api/events", (req, res) => {
+  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-store" });
+  res.flushHeaders();
+  res.write("retry: 3000\n\n");
+  eventClients.add(res);
+  // Fenêtre qui vient de s'ouvrir grâce au raccourci : elle écoute dès qu'elle est prête.
+  if (Date.now() - listenAt < 8000) (listenAt = 0), res.write("event: listen\ndata: 1\n\n");
+  const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
+  req.on("close", () => (clearInterval(ping), eventClients.delete(res)));
+});
+app.post("/api/hotkey", (req, res) => {
+  if (eventClients.size) for (const c of eventClients) c.write("event: listen\ndata: 1\n\n");
+  else listenAt = Date.now();
+  res.json({ ok: true });
+});
 // Ouvre une appli de la liste fermée (ex. le Gestionnaire des tâches depuis une fiche).
 app.post("/api/app/:id", (req, res) => {
   if (!APP_IDS.includes(req.params.id)) return res.status(400).json({ error: "Appli inconnue." });

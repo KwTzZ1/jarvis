@@ -39,6 +39,29 @@ public static class JarvisWindow {
 }
 '@
 
+# Raccourci clavier global : Windows prévient cette fenêtre invisible quand on appuie sur la combinaison.
+Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+public class JarvisHotkey : NativeWindow {
+    [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint mods, uint vk);
+    [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
+    public event EventHandler Pressed;
+    public bool Active;
+    public JarvisHotkey() { CreateHandle(new CreateParams()); }
+    public bool Set(uint mods, uint vk) {
+        if (Active) { UnregisterHotKey(Handle, 1); Active = false; }
+        if (vk != 0) Active = RegisterHotKey(Handle, 1, mods | 0x4000, vk);
+        return Active;
+    }
+    protected override void WndProc(ref Message m) {
+        if (m.Msg == 0x0312 && Pressed != null) Pressed(this, EventArgs.Empty);
+        base.WndProc(ref m);
+    }
+}
+'@
+
 $root = Split-Path -Parent $PSScriptRoot
 $dataDir = Join-Path $root 'data'
 if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir | Out-Null }
@@ -192,6 +215,7 @@ $tray.add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Open-JarvisWind
 
 # Relance automatique si le serveur s'arrête tout seul (3 essais, puis un seul message).
 $watch.add_Tick({
+    Update-Hotkey
     if ($script:server -and $script:server.HasExited -and -not (Test-Server)) {
         $script:crashes++
         if ($script:crashes -le 3) {
@@ -202,6 +226,26 @@ $watch.add_Tick({
     }
 })
 $watch.Start()
+
+# Raccourci pour parler (réglage « Raccourci pour parler », relu toutes les 15 s) : la fenêtre passe devant et écoute.
+$hotkeys = @{ 'ctrl+space' = @(2, 0x20); 'ctrl+alt+j' = @(3, 0x4A); 'ctrl+shift+space' = @(6, 0x20); 'off' = @(0, 0) }
+$hotkey = New-Object JarvisHotkey
+$script:hotkeyName = ''
+function Update-Hotkey {
+    $name = (Get-JarvisSetting 'HOTKEY' 'ctrl+space').ToLower()
+    if ($name -eq $script:hotkeyName) { return }
+    $script:hotkeyName = $name
+    $k = $hotkeys[$name]
+    if (-not $k) { $k = $hotkeys['ctrl+space'] }
+    if (-not $hotkey.Set([uint32]$k[0], [uint32]$k[1]) -and $k[1]) {
+        $tray.ShowBalloonTip(5000, 'Jarvis', "Le raccourci $name est déjà pris par une autre appli. Choisis-en un autre dans les réglages (Personnalisation).", 'Warning')
+    }
+}
+$hotkey.add_Pressed({
+    Open-JarvisWindow
+    try { Invoke-RestMethod -Method Post -Uri "$url/api/hotkey" -TimeoutSec 2 | Out-Null } catch {}
+})
+Update-Hotkey
 
 $tray.ShowBalloonTip(2500, 'Jarvis', "Jarvis tourne en arrière-plan. Clic droit sur l'icône pour quitter.", 'Info')
 [System.Windows.Forms.Application]::Run()

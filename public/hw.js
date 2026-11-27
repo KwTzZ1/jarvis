@@ -287,6 +287,7 @@
 
   function show(k, pin) {
     clearTimeout(hideT);
+    if (k !== openK || pin) window.sfx?.(pin ? "open" : "tick");
     if (k !== openK && pin === undefined) pinned = false; // survol d'un autre point : il prend la main
     if (pin !== undefined) pinned = pin;
     openK = k;

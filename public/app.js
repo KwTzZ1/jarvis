@@ -957,7 +957,7 @@ try {
 const saveTimers = () => localStorage.setItem("timers", JSON.stringify(timers));
 
 function startTimer(seconds, label) {
-  timers.push({ end: Date.now() + seconds * 1000, label: String(label || "Minuteur").slice(0, 60) });
+  timers.push({ start: Date.now(), end: Date.now() + seconds * 1000, label: String(label || "Minuteur").slice(0, 60) });
   saveTimers();
   renderTimers();
 }
@@ -1649,6 +1649,7 @@ async function openSettings(focusSection) {
       }
       row.append(label, wrap);
       if (f.help) row.append(el("div", "help", f.help));
+      if (f.key === "THEME" && window.themeSwatches) wrap.append(themeSwatches(input));
       sec.append(row);
     }
     content.append(sec);
