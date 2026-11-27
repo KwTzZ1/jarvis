@@ -792,3 +792,16 @@ input, select, textarea { font-family: var(--font); font-weight: 500; }
 
 /* Pages autres que l'Assistant : les anneaux s'arrêtent. */
 body[data-page]:not([data-page="0"]) .hr { animation-play-state: paused; }
+
+/* ----- Sphère flottante (grande au centre, mini en bas à droite sur les autres onglets) ----- */
+.orb { position: fixed; left: 0; top: 0; z-index: 30; transform-origin: 0 0; pointer-events: none; display: grid; place-items: center; }
+.orb.ready { transition: transform .75s cubic-bezier(.7, 0, .25, 1); }
+.orb .reactor { pointer-events: auto; cursor: pointer; border-radius: 50%; }
+.orb .hud-rings, .orb .reactor { position: absolute; }
+.orb .core-label { transition: opacity .3s; }
+body.orb-mini .orb .core-label { opacity: 0; }
+body.orb-mini .orb .reactor { inset: 4%; }
+body.orb-mini .orb .reactor:hover { filter: brightness(1.4) drop-shadow(0 0 18px rgba(46, 197, 255, .8)); }
+body.orb-mini .orb .hr2 { display: none; }
+body[data-page]:not([data-page="0"]) .orb .hr { animation-play-state: running; }
+.modal-bg, .viewer, .boot, .palette-bg, .toast { z-index: 1000; }

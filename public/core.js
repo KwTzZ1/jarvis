@@ -26,10 +26,10 @@
 
   let W = 0, H = 0, R = 0;
   function resize() {
-    const box = canvas.getBoundingClientRect();
+    // Taille réelle (sans le zoom de la mini-sphère), pour garder un dessin net.
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    W = box.width;
-    H = box.height;
+    W = canvas.clientWidth;
+    H = canvas.clientHeight;
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -37,9 +37,10 @@
   }
   new ResizeObserver(resize).observe(canvas);
 
-  const COLORS = { idle: [40, 150, 255], listening: [70, 215, 255], thinking: [110, 160, 255], speaking: [55, 185, 255], offline: [110, 125, 140] };
+  const COLORS = { idle: [40, 150, 255], listening: [70, 215, 255], thinking: [110, 160, 255], speaking: [185, 105, 255], offline: [110, 125, 140] };
   const mode = () => {
     const c = reactor.classList;
+    if (typeof state !== "undefined" && state.speaking && !c.contains("offline")) return "speaking"; // suit la voix, même si l'affichage change
     return c.contains("offline") ? "offline" : c.contains("listening") ? "listening" : c.contains("thinking") ? "thinking" : c.contains("speaking") ? "speaking" : "idle";
   };
 
@@ -54,10 +55,14 @@
     return Math.min(1, Math.sqrt(sum / buf.length) / 40);
   }
 
-  const visible = () => !document.hidden && document.body.dataset.page !== "1" && document.body.dataset.page !== "2" && document.body.dataset.page !== "3";
+  const isMini = () => !!document.body.dataset.page && document.body.dataset.page !== "0";
+  let skip = false;
 
   function frame(now) {
-    if (!visible() || !W) return setTimeout(() => requestAnimationFrame(frame), 400);
+    if (canvas.clientWidth !== W || canvas.clientHeight !== H) resize(); // filet si l'observateur n'a rien vu
+    if (document.hidden || !W) return setTimeout(() => requestAnimationFrame(frame), 400);
+    // En mini (autres pages) : une image sur deux suffit.
+    if (isMini() && (skip = !skip)) return requestAnimationFrame(frame);
     const t = now / 1000;
     const m = mode();
     const level = voiceLevel();
@@ -95,26 +100,32 @@
     const tilt = 0.35 + Math.sin(t * 0.2) * 0.1;
     const cosX = Math.cos(tilt), sinX = Math.sin(tilt);
     const bins = [[], [], [], []];
-    const wob = m === "speaking" || m === "listening" ? energy * 0.09 : 0.02;
+    const amp = m === "speaking" ? 0.07 + energy * 0.22 : m === "listening" ? 0.1 : 0.06;
+    const tt = t * (m === "speaking" ? 2.6 : m === "thinking" ? 1.4 : 0.6);
+    const jit = m === "speaking" ? energy * 0.05 : 0.008;
     for (const p of pts) {
-      const x1 = p.x * cosY - p.z * sinY;
-      const z1 = p.x * sinY + p.z * cosY;
-      const y2 = p.y * cosX - z1 * sinX;
-      const z2 = p.y * sinX + z1 * cosX;
-      const s = rad * (1 + wob * Math.sin(p.k + t * 6));
+      // Déformation organique : la forme bouge lentement, et vibre quand Jarvis parle.
+      const n = Math.sin(p.x * 2.7 + tt) * Math.sin(p.y * 3.1 - tt * 0.8) * Math.sin(p.z * 2.3 + tt * 1.2);
+      const d = 1 + amp * n + jit * Math.sin(p.k + t * 11);
+      const px = p.x * d, py = p.y * d, pz = p.z * d;
+      const x1 = px * cosY - pz * sinY;
+      const z1 = px * sinY + pz * cosY;
+      const y2 = py * cosX - z1 * sinX;
+      const z2 = py * sinX + z1 * cosX;
+      const s = rad;
       const depth = (z2 + 1) / 2;
       bins[Math.max(0, Math.min(3, Math.floor(depth * 4)))].push(cx + x1 * s, cy + y2 * s);
     }
     const alphas = [0.12, 0.3, 0.6, 0.95];
     const sizes = [1, 1.3, 1.6, 2];
     bins.forEach((b, i) => {
-      ctx.fillStyle = i === 3 ? `rgba(200,240,255,${alphas[i]})` : `rgba(${rgb},${alphas[i]})`;
+      ctx.fillStyle = i === 3 ? `rgba(${Math.min(255, cr + 150)},${Math.min(255, cg + 90)},255,${alphas[i]})` : `rgba(${rgb},${alphas[i]})`;
       const sz = sizes[i];
       for (let j = 0; j < b.length; j += 2) ctx.fillRect(b[j] - sz / 2, b[j + 1] - sz / 2, sz, sz);
     });
 
     // Anneau net sur le bord.
-    ctx.strokeStyle = `rgba(${rgb},${0.55 + energy * 0.4})`;
+    ctx.strokeStyle = `rgba(${rgb},${0.12 + energy * 0.2})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, rad, 0, 6.283);
@@ -159,6 +170,34 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+
+  // ---------- Mini-sphère : hors de l'Assistant, elle se réduit et file en bas à droite ----------
+  const slot = document.querySelector(".core-wrap");
+  const orb = document.createElement("div");
+  orb.className = "orb";
+  orb.append(...slot.childNodes);
+  document.body.append(orb);
+  const MINI = 92;
+  function place() {
+    const page = document.getElementById("pageAssistant");
+    const sr = slot.getBoundingClientRect();
+    const pr = page.getBoundingClientRect();
+    const size = sr.width;
+    orb.style.width = orb.style.height = size + "px";
+    const mini = isMini();
+    document.body.classList.toggle("orb-mini", mini);
+    if (!mini) orb.style.transform = `translate(${sr.left - pr.left}px, ${sr.top}px)`;
+    else {
+      const k = MINI / size;
+      orb.style.transform = `translate(${innerWidth - MINI - 26}px, ${innerHeight - MINI - 26}px) scale(${k})`;
+    }
+    orb.title = mini ? "Retour à l'assistant" : "Clique pour parler";
+  }
+  new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ["data-page"] });
+  new ResizeObserver(place).observe(slot);
+  addEventListener("resize", place);
+  place();
+  requestAnimationFrame(() => orb.classList.add("ready")); // pas d'animation au tout premier placement
 
   // ---------- Séquence de démarrage (une fois par lancement) ----------
   const boot = document.getElementById("boot");

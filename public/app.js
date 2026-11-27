@@ -1343,7 +1343,8 @@ $("#wakeToggle").onclick = () => {
 
 const toggleMic = () => (state.listening && recMode === "command" ? rec?.stop() : startCommand());
 $("#micBtn").onclick = toggleMic;
-$("#reactor").onclick = toggleMic;
+// Mini-sphère (autres onglets) : un clic ramène à l'assistant ; sur l'assistant, un clic = parler.
+$("#reactor").onclick = () => (document.body.dataset.page && document.body.dataset.page !== "0" ? goTo(0) : toggleMic());
 
 // Maintenir Espace (hors champ texte) pour parler.
 const isTyping = () => ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
