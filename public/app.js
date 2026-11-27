@@ -105,13 +105,23 @@ function applyStatus(s) {
   document.title = s.name.toUpperCase();
   $("#brandName").textContent = s.name.toUpperCase();
   const model = s.model.replace("claude-", "").replace(/-(\d+)-(\d+)$/, " $1.$2");
-  $("#modelName").textContent = !s.ai ? "clé manquante" : s.aiOk === false ? "clé refusée" : model;
-  // Vert : clé validée. Orange : pas encore vérifiée. Rouge : absente ou refusée.
-  $("#connAi").className = "conn " + (!s.ai || s.aiOk === false ? "" : s.aiOk ? "ok" : "warn");
-  $("#connAi").title = !s.ai ? "Renseigne ta clé dans les réglages." : s.aiOk === false ? s.aiMessage : s.aiOk ? "Clé API valide." : "Clé pas encore vérifiée.";
+  const blocked = !s.ai || s.aiOk === false;
+  $("#modelName").textContent = !s.ai ? "clé manquante" : s.aiOk === false ? (s.aiReason === "credit" ? "sans crédit" : "clé refusée") : model;
+  // Vert : l'IA a vraiment répondu. Orange : pas encore vérifiée. Rouge : clé absente, refusée ou compte sans crédit.
+  $("#connAi").className = "conn " + (blocked ? "" : s.aiOk ? "ok" : "warn");
+  $("#connAi").title = !s.ai
+    ? "Renseigne ta clé dans les réglages."
+    : s.aiOk === false
+      ? s.aiMessage + (s.aiDetail ? `\n\nDétail technique : ${s.aiDetail}` : "")
+      : s.aiOk
+        ? "Clé API valide, l'IA répond."
+        : "Vérification en cours…";
   setConn("#connGoogle", s.google, "google");
   setConn("#connSpotify", s.spotify, "spotify");
   updateCost(s.usage);
+  // L'IA était bloquée et ne l'est plus (clé corrigée, crédit ajouté) : on le dit.
+  if (blocked) state.aiBlocked = true;
+  else if (s.aiOk === true && state.aiBlocked) onAiReady();
 }
 
 async function loadStatus() {
@@ -132,13 +142,22 @@ async function loadStatus() {
   idleMode();
 }
 
-// La clé vient d'être validée : on retire l'avertissement.
+// L'IA vient d'être débloquée : on retire l'avertissement et on le signale (une seule fois).
 function onAiReady() {
+  if (!state.aiBlocked) return;
+  state.aiBlocked = false;
   if (state.noKeyMsg) {
     state.noKeyMsg.remove();
     state.noKeyMsg = null;
-    addMsg("bot", "Clé API validée. Je suis prêt : que puis-je faire pour toi ?");
   }
+  addMsg("bot", "C'est réglé : ma clé fonctionne et ton compte a du crédit. Que puis-je faire pour toi ?");
+  toast("IA opérationnelle.");
+}
+
+// Affiche (ou remplace) l'avertissement qui explique pourquoi l'IA ne peut pas répondre.
+function showAiWarning(text) {
+  if (state.noKeyMsg) state.noKeyMsg.remove();
+  state.noKeyMsg = addMsg("bot", text, "error");
 }
 
 function setConn(sel, info, service) {
@@ -905,6 +924,13 @@ $("#settingsForm").addEventListener("submit", async (e) => {
   try {
     const r = await api("/api/settings", { method: "POST", body: { values } });
     applyStatus(r.status);
+    if (r.ai && !r.ai.ok && r.ai.reason === "credit") {
+      // La clé est bonne : rien à corriger ici, c'est le compte Anthropic qui manque de crédit.
+      closeSettings();
+      showAiWarning(r.ai.message);
+      toast("Clé enregistrée, mais ton compte Anthropic n'a pas de crédit.", true);
+      return;
+    }
     if (r.ai && !r.ai.ok) {
       // On garde la fenêtre ouverte pour que l'erreur soit bien vue.
       errBox.replaceChildren(iconEl("alert", 16), document.createTextNode(r.ai.message));
@@ -912,7 +938,6 @@ $("#settingsForm").addEventListener("submit", async (e) => {
       return;
     }
     closeSettings();
-    if (r.ai?.ok) onAiReady();
     const disconnected = r.changed.some((k) => k.startsWith("GOOGLE_") || k.startsWith("SPOTIFY_"));
     toast(r.ai?.ok ? "Réglages enregistrés. Clé API Claude valide." : disconnected ? "Réglages enregistrés. Reconnecte le service dont tu as changé les identifiants." : "Réglages enregistrés.");
     refreshAll();

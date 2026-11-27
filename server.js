@@ -47,6 +47,8 @@ function status() {
     ai: aiConfigured(),
     aiOk: aiConfigured() ? aiHealth.ok : false,
     aiMessage: aiHealth.message,
+    aiReason: aiHealth.reason,
+    aiDetail: aiHealth.detail,
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
     spotify: { configured: spotify.spotifyConfigured(), connected: spotify.spotifyConnected() },
     usage: usageTotals,
