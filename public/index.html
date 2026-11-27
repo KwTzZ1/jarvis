@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JARVIS</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <header class="topbar">
+    <div class="brand"><span class="brand-dot"></span><span id="brandName">JARVIS</span></div>
+    <div class="clock"><span id="clockTime">--:--</span><span id="clockDate"></span></div>
+    <div class="top-actions">
+      <span class="cost" id="cost" title="Coût IA de cette session"><i data-icon="coins" data-size="14"></i><span id="costValue">0,000 $</span></span>
+      <button class="icon-btn" id="voiceToggle" title="Voix de l'assistant"><i data-icon="volume"></i></button>
+      <button class="icon-btn" id="wakeToggle" title="Écoute permanente du mot de réveil"><i data-icon="radio"></i></button>
+      <button class="icon-btn" id="settingsBtn" title="Réglages"><i data-icon="settings"></i></button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Colonne gauche -->
+    <aside class="col">
+      <section class="panel">
+        <h2><span><i data-icon="cloud-sun" data-size="14"></i>Météo</span></h2>
+        <div id="weather" class="muted">Chargement…</div>
+      </section>
+
+      <section class="panel">
+        <h2><span><i data-icon="plug" data-size="14"></i>Connexions</span></h2>
+        <div class="conn" id="connAi"><span class="led"></span><span>IA Claude</span><small id="modelName"></small></div>
+        <div class="conn" id="connGoogle"><span class="led"></span><span>Google</span><button class="mini-btn">Connecter</button></div>
+        <div class="conn" id="connSpotify"><span class="led"></span><span>Spotify</span><button class="mini-btn">Connecter</button></div>
+      </section>
+
+      <section class="panel">
+        <h2><span><i data-icon="bookmark" data-size="14"></i>Mémoire</span></h2>
+        <ul id="memory" class="list small"></ul>
+        <p class="hint">Dis « retiens que… » pour m'apprendre quelque chose.</p>
+      </section>
+
+      <section class="panel" id="timersPanel" hidden>
+        <h2><span><i data-icon="timer" data-size="14"></i>Minuteurs</span></h2>
+        <ul id="timers" class="list"></ul>
+      </section>
+    </aside>
+
+    <!-- Centre -->
+    <section class="center">
+      <div class="reactor" id="reactor" title="Clique pour parler">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <div class="core"></div>
+      </div>
+      <div class="state" id="state">En ligne</div>
+
+      <div class="chips">
+        <button class="chip" data-prompt="Fais-moi mon briefing : météo du jour, mon agenda d'aujourd'hui et demain, mes mails non lus importants et mes tâches."><i data-icon="sunrise" data-size="15"></i>Briefing</button>
+        <button class="chip" data-prompt="Qu'est-ce que j'ai de prévu cette semaine ?"><i data-icon="calendar" data-size="15"></i>Ma semaine</button>
+        <button class="chip" data-prompt="Résume mes mails non lus."><i data-icon="mail" data-size="15"></i>Mes mails</button>
+        <button class="chip" data-prompt="Mets-moi de la musique pour me concentrer."><i data-icon="headphones" data-size="15"></i>Musique focus</button>
+      </div>
+
+      <div class="chat" id="chat"></div>
+
+      <form class="composer" id="composer">
+        <button type="button" class="mic" id="micBtn" title="Parler (ou maintiens Espace)"><i data-icon="mic" data-size="20"></i></button>
+        <input id="input" autocomplete="off" placeholder="Parle-moi ou écris ici…" />
+        <button type="submit" class="send" title="Envoyer"><i data-icon="arrow-up" data-size="20"></i></button>
+      </form>
+    </section>
+
+    <!-- Colonne droite -->
+    <aside class="col">
+      <section class="panel">
+        <h2><span><i data-icon="music" data-size="14"></i>Spotify</span></h2>
+        <div id="music" class="muted">Non connecté</div>
+      </section>
+
+      <section class="panel">
+        <h2><span><i data-icon="calendar" data-size="14"></i>Agenda</span><button class="link-btn" data-refresh title="Actualiser"><i data-icon="refresh" data-size="14"></i></button></h2>
+        <ul id="events" class="list"></ul>
+      </section>
+
+      <section class="panel">
+        <h2><span><i data-icon="mail" data-size="14"></i>Mails non lus</span></h2>
+        <ul id="emails" class="list"></ul>
+      </section>
+
+      <section class="panel">
+        <h2><span><i data-icon="tasks" data-size="14"></i>Tâches</span></h2>
+        <ul id="tasks" class="list"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <!-- Réglages -->
+  <div class="modal-bg" id="settings" hidden>
+    <form class="modal" id="settingsForm">
+      <div class="modal-head">
+        <h3><i data-icon="settings" data-size="16"></i>Réglages</h3>
+        <button type="button" class="icon-btn" id="settingsClose" title="Fermer"><i data-icon="x"></i></button>
+      </div>
+      <div class="modal-body" id="settingsFields"></div>
+      <div class="modal-foot">
+        <span class="hint">Tout reste enregistré sur ton PC. Le guide pour obtenir les clés est dans le README.</span>
+        <button class="btn" type="submit">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <template id="emailDraftTpl">
+    <div class="draft">
+      <div class="draft-title"><i data-icon="mail" data-size="15"></i>Mail prêt à partir. Vérifie avant d'envoyer.</div>
+      <label>À <input class="d-to" /></label>
+      <label>Objet <input class="d-subject" /></label>
+      <textarea class="d-body" rows="6"></textarea>
+      <div class="draft-actions">
+        <button class="btn ghost d-cancel" type="button">Annuler</button>
+        <button class="btn d-send" type="button">Envoyer</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
