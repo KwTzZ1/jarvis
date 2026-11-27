@@ -40,6 +40,12 @@ const emit = (name) => hooks[name].forEach((fn) => {
 
 
 // ---------- Utilitaires ----------
+// Ouvre un lien dans le navigateur habituel de l'utilisateur (là où il est connecté à GitHub, Railway…).
+function openExternal(url) {
+  return api("/api/open-external", { method: "POST", body: { url } }).catch((e) => toast(e.message, true));
+}
+// L'extension de Jarvis est-elle active ? (elle permet d'afficher tous les sites dans l'onglet Web)
+const framesUnlocked = () => document.documentElement.dataset.jarvisFrames === "1";
 async function api(path, options = {}) {
   let res;
   try {
@@ -219,7 +225,7 @@ function setConn(sel, info, service) {
       refreshMusic();
     } else if (!info.configured) {
       toast(`Renseigne d'abord le Client ID et le Client secret ${label} dans les réglages.`, true);
-      openSettings();
+      openSettings(label);
     } else {
       location.href = `/auth/${service}`;
     }
@@ -236,7 +242,7 @@ function setDiscordConn(d) {
   const canInvite = d.configured && d.ok && d.invite;
   btn.textContent = canInvite ? "Inviter" : "Régler";
   btn.title = canInvite ? "Ajouter ton bot à un de tes serveurs Discord" : "Régler Discord";
-  btn.onclick = () => (canInvite ? window.open(d.invite, "_blank", "noopener") : openSettings());
+  btn.onclick = () => (canInvite ? openExternal(d.invite) : openSettings());
 }
 
 function updateCost(u) {
@@ -1216,57 +1222,159 @@ document.addEventListener("keyup", (e) => {
 });
 
 // ---------- Réglages ----------
-async function openSettings() {
+// Présentation des sections des réglages : icône, explication, lien pour obtenir la clé, état.
+const SECTIONS = {
+  "Intelligence artificielle": {
+    title: "IA Claude", icon: "zap", desc: "Le cerveau principal : le plus malin, payant (quelques centimes).",
+    link: ["Obtenir une clé", "https://platform.claude.com/settings/keys"],
+    status: (s) => (!s.ai ? ["Pas de clé", "off"] : s.aiOk === false ? [s.aiReason === "credit" ? "Sans crédit" : "Clé refusée", "off"] : s.aiOk ? ["Fonctionne", "on"] : ["Vérification…", "warn"]),
+  },
+  "IA gratuite (Groq)": {
+    title: "IA gratuite", icon: "zap", desc: "Prend le relais gratuitement (environ 1 000 requêtes par jour).",
+    link: ["Créer une clé gratuite", "https://console.groq.com/keys"],
+    status: (s) => (!s.free?.configured ? ["Pas de clé", "off"] : s.free.ok === false ? ["Clé refusée", "off"] : s.free.ok ? ["Fonctionne", "on"] : ["Vérification…", "warn"]),
+  },
+  Personnalisation: { title: "Personnalisation", icon: "user", desc: "Nom de l'assistant, ton prénom, ta ville, le moteur de recherche et les sons." },
+  Google: {
+    title: "Google", icon: "calendar", desc: "Agenda, Gmail et tâches. Identifiants à créer une fois (voir README).",
+    link: ["Console Google Cloud", "https://console.cloud.google.com/auth/clients"],
+    status: (s) => (s.google?.connected ? ["Connecté", "on"] : s.google?.configured ? ["À connecter", "warn"] : ["Non réglé", "off"]),
+  },
+  Spotify: {
+    title: "Spotify", icon: "music", desc: "Musique dans Jarvis (Premium), tes playlists et titres likés.",
+    link: ["Tableau de bord Spotify", "https://developer.spotify.com/dashboard"],
+    status: (s) => (s.spotify?.connected ? (s.spotify.scopesOk ? ["Connecté", "on"] : ["À reconnecter", "warn"]) : s.spotify?.configured ? ["À connecter", "warn"] : ["Non réglé", "off"]),
+  },
+  YouTube: {
+    title: "YouTube", icon: "youtube", desc: "Recherche de vidéos par la voix (« mets la vidéo de … »). Gratuit.",
+    link: ["Activer l'API YouTube", "https://console.cloud.google.com/apis/library/youtube.googleapis.com"],
+    status: (s) => (s.youtube ? ["Clé enregistrée", "on"] : ["Pas de clé", "off"]),
+  },
+  Discord: {
+    title: "Discord", icon: "message", desc: "Ton bot lit et écrit dans tes salons.",
+    link: ["Portail développeur", "https://discord.com/developers/applications"],
+    status: (s) => (!s.discord?.configured ? ["Pas de jeton", "off"] : s.discord.ok === false ? ["Jeton refusé", "off"] : s.discord.ok ? ["Fonctionne", "on"] : ["Vérification…", "warn"]),
+  },
+};
+
+async function openSettings(focusSection) {
   let fields;
   try {
     ({ fields } = await api("/api/settings"));
   } catch (e) {
     return toast(e.message, true);
   }
+  const s = state.status || {};
   const box = $("#settingsFields");
   box.replaceChildren();
   $("#settingsError").hidden = true;
-  let group = null;
-  for (const f of fields) {
-    if (f.group !== group) {
-      group = f.group;
-      box.append(el("div", "set-group", group));
+  const layout = el("div", "set-layout");
+  const nav = el("nav", "set-nav");
+  const content = el("div", "set-content");
+  layout.append(nav, content);
+  box.append(layout);
+
+  // Résumé : combien de services sont prêts.
+  const groups = [...new Set(fields.map((f) => f.group))];
+  const withStatus = groups.filter((g) => SECTIONS[g]?.status);
+  const ready = withStatus.filter((g) => SECTIONS[g].status(s)[1] === "on").length;
+  const summary = el("div", "set-summary");
+  const bar = el("div", "set-progress");
+  const fill = el("span");
+  fill.style.width = `${Math.round((100 * ready) / Math.max(1, withStatus.length))}%`;
+  bar.append(fill);
+  summary.append(el("div", "set-summary-text", `${ready} service${ready > 1 ? "s" : ""} prêt${ready > 1 ? "s" : ""} sur ${withStatus.length}`), bar);
+  nav.append(summary);
+
+  for (const group of groups) {
+    const meta = SECTIONS[group] || { title: group, icon: "settings" };
+    const st = meta.status ? meta.status(s) : null;
+    const id = "sec_" + group.replace(/[^a-z]/gi, "");
+
+    const navBtn = el("button", "set-nav-item");
+    navBtn.type = "button";
+    navBtn.append(iconEl(meta.icon, 16), el("span", null, meta.title));
+    if (st) navBtn.append(el("span", "dot " + st[1]));
+    navBtn.onclick = () => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      nav.querySelectorAll(".set-nav-item").forEach((b) => b.classList.toggle("active", b === navBtn));
+    };
+    nav.append(navBtn);
+
+    const sec = el("section", "set-section");
+    sec.id = id;
+    const head = el("div", "set-head");
+    const ic = el("div", "set-icon");
+    ic.append(iconEl(meta.icon, 20));
+    const titles = el("div", "set-titles");
+    titles.append(el("h4", null, meta.title));
+    if (meta.desc) titles.append(el("p", null, meta.desc));
+    head.append(ic, titles);
+    if (st) head.append(el("span", "pill " + st[1], st[0]));
+    sec.append(head);
+    if (meta.link) {
+      const a = el("button", "proj-link set-link");
+      a.type = "button";
+      a.append(iconEl("external", 14), document.createTextNode(meta.link[0]));
+      a.onclick = () => openExternal(meta.link[1]);
+      sec.append(a);
     }
-    const row = el("div", "field");
-    const label = el("label", null, f.label);
-    label.htmlFor = "set_" + f.key;
-    let input;
-    if (f.options) {
-      input = el("select");
-      f.options.forEach(([v, l]) => {
-        const o = el("option", null, l);
-        o.value = v;
-        input.append(o);
-      });
-      input.value = f.options.some(([v]) => v === f.value) ? f.value : f.options[0][0];
-    } else {
-      input = el("input");
-      input.type = f.secret ? "password" : "text";
-      input.value = f.value;
-      input.placeholder = f.placeholder || "";
-      input.autocomplete = f.secret ? "new-password" : "off";
-      input.spellcheck = false;
-      if (f.max) input.maxLength = f.max;
+
+    for (const f of fields.filter((x) => x.group === group)) {
+      const row = el("div", "field");
+      const label = el("label", null, f.label);
+      label.htmlFor = "set_" + f.key;
+      let input;
+      if (f.options) {
+        input = el("select");
+        f.options.forEach(([v, l]) => {
+          const o = el("option", null, l);
+          o.value = v;
+          input.append(o);
+        });
+        input.value = f.options.some(([v]) => v === f.value) ? f.value : f.options[0][0];
+      } else {
+        input = el("input");
+        input.type = f.secret ? "password" : "text";
+        input.value = f.value;
+        input.placeholder = f.placeholder || "";
+        input.autocomplete = f.secret ? "new-password" : "off";
+        input.spellcheck = false;
+        if (f.max) input.maxLength = f.max;
+      }
+      input.id = "set_" + f.key;
+      input.name = f.key;
+      const wrap = el("div", "field-input");
+      wrap.append(input);
+      if (f.secret) {
+        // Œil : afficher la clé qu'on vient de coller pour vérifier qu'elle est complète.
+        const eye = el("button", "eye");
+        eye.type = "button";
+        eye.title = "Afficher / masquer";
+        eye.textContent = "Voir";
+        eye.onclick = () => {
+          input.type = input.type === "password" ? "text" : "password";
+          eye.textContent = input.type === "password" ? "Voir" : "Masquer";
+        };
+        wrap.append(eye);
+      }
+      row.append(label, wrap);
+      if (f.help) row.append(el("div", "help", f.help));
+      sec.append(row);
     }
-    input.id = "set_" + f.key;
-    input.name = f.key;
-    row.append(label, input);
-    if (f.help) row.append(el("div", "help", f.help));
-    box.append(row);
+    content.append(sec);
   }
   $("#settings").hidden = false;
+  const target = focusSection && [...content.querySelectorAll(".set-section")].find((x) => x.id.includes(focusSection));
+  if (target) target.scrollIntoView({ block: "start" });
+  nav.querySelector(".set-nav-item")?.classList.add("active");
   const key = $("#set_ANTHROPIC_API_KEY");
-  if (key && !state.status?.ai) key.focus();
+  if (key && !s.ai && !s.free?.configured) key.focus();
 }
 function closeSettings() {
   $("#settings").hidden = true;
 }
-$("#settingsBtn").addEventListener("click", openSettings);
+$("#settingsBtn").addEventListener("click", () => openSettings());
 $("#settingsClose").addEventListener("click", closeSettings);
 // Fermer en cliquant à côté de la fenêtre (uniquement si le clic a commencé ET fini sur le fond).
 let downOnBackdrop = false;

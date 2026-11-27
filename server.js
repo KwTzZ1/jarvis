@@ -13,6 +13,7 @@ import { checkPage } from "./lib/web.js";
 import * as projects from "./lib/projects.js";
 import { searchVideos, youtubeConfigured } from "./lib/youtube.js";
 import * as images from "./lib/images.js";
+import { spawn } from "child_process";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_URL = `http://127.0.0.1:${PORT}`;
@@ -198,7 +199,7 @@ app.post(
   wrap(async (req, res) => {
     const b = req.body || {};
     if (b.liked) return res.json(await spotify.playLiked(true));
-    if (typeof b.playlist === "string") return res.json(await spotify.playPlaylist(b.playlist));
+    if (typeof b.playlist === "string") return res.json(await spotify.playPlaylist(b.playlist, { order: b.order, start: b.start }));
     res.status(400).json({ error: "Rien à lancer." });
   }),
 );
@@ -358,6 +359,20 @@ app.get(
     res.json({ videos: await searchVideos(String(req.query.q || "")) });
   }),
 );
+
+// ---------- Ouvrir un lien dans le navigateur habituel (où l'utilisateur est connecté) ----------
+app.post("/api/open-external", (req, res) => {
+  let url;
+  try {
+    url = new URL(String(req.body?.url || ""));
+  } catch {
+    return res.status(400).json({ error: "Adresse invalide" });
+  }
+  if (!["http:", "https:"].includes(url.protocol)) return res.status(400).json({ error: "Seuls les liens web sont autorisés" });
+  // Sans passer par un interpréteur de commandes : l'adresse est un simple argument.
+  spawn("rundll32.exe", ["url.dll,FileProtocolHandler", url.href], { detached: true, stdio: "ignore" }).unref();
+  res.json({ ok: true });
+});
 
 // ---------- Onglet Web ----------
 app.get(

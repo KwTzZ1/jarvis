@@ -89,12 +89,16 @@ function Open-JarvisWindow {
     $title = (Get-JarvisSetting 'ASSISTANT_NAME' 'Jarvis').ToUpper()
     if ([JarvisWindow]::Focus($title)) { return }
     $browser = Find-Browser
-    if ($browser) {
-        # Profil dédié : fenêtre d'appli indépendante, micro autorisé une seule fois.
-        $profileDir = Join-Path $env:LOCALAPPDATA 'Jarvis\fenetre'
-        Start-Process -FilePath $browser -ArgumentList @("--app=$url", "--user-data-dir=`"$profileDir`"", '--window-size=1440,900', '--no-first-run', '--no-default-browser-check')
+    if (-not $browser) { Start-Process $url; return }
+    # Profil dédié : fenêtre d'appli indépendante, micro autorisé une seule fois.
+    $profileDir = Join-Path $env:LOCALAPPDATA 'Jarvis\fenetre'
+    $node = (Get-Command node -ErrorAction SilentlyContinue).Source
+    $keeper = Join-Path $PSScriptRoot 'window.mjs'
+    if ($node -and (Test-Path $keeper)) {
+        # Le gardien ouvre la fenêtre et y charge l'extension qui permet d'afficher tous les sites dans l'onglet Web.
+        Start-Process -FilePath $node -ArgumentList @("`"$keeper`"", "`"$browser`"", $url, "`"$profileDir`"") -WindowStyle Hidden
     } else {
-        Start-Process $url
+        Start-Process -FilePath $browser -ArgumentList @("--app=$url", "--user-data-dir=`"$profileDir`"", '--window-size=1440,900', '--no-first-run', '--no-default-browser-check')
     }
 }
 

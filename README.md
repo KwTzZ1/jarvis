@@ -134,6 +134,11 @@ Sans clé, les liens YouTube collés dans la barre d'adresse se lisent quand mê
 
 ## 6. Onglet Web
 
+**Tous les sites s'affichent** (YouTube complet, Reddit, journaux, liens cliqués dans Google…). Comment ça marche :
+- La fenêtre Jarvis est ouverte par un petit « gardien » (`launcher/window.mjs`), qui y charge l'extension `extension/` de Jarvis.
+- Cette extension retire, **uniquement pour les sites affichés dans l'onglet Web de Jarvis**, l'interdiction « pas d'affichage dans une autre appli ». Ton Chrome habituel n'est pas concerné.
+- Dans l'onglet Web, tu n'es connecté à rien (comme en navigation privée). Les liens qui demandent d'être connecté (GitHub privé, Railway, claude.ai) s'ouvrent donc dans **ton navigateur habituel**. C'est aussi le rôle du bouton en haut à droite de la barre d'adresse.
+
 Troisième page : barre d'adresse, plusieurs onglets, précédent, suivant, recharger, accueil.
 - Tape une recherche ou une adresse. La recherche passe par Google, ou Bing (au choix dans **Réglages > Recherche**).
 - Beaucoup de grands sites (YouTube en page normale, Reddit, la plupart des journaux…) **refusent d'être affichés dans une autre appli**. Jarvis le détecte et propose « Ouvrir dans une fenêtre ».
@@ -167,6 +172,11 @@ Troisième page : barre d'adresse, plusieurs onglets, précédent, suivant, rech
 
 « Mets ma playlist Chill » cherche d'abord dans **tes** playlists. « Mets mes titres likés » lance tes coups de cœur. Le widget Spotify a aussi un menu « Mes playlists ».
 Spotify ne laisse pas les nouvelles applis lire ses propres playlists automatiques (Découvertes de la semaine, Daylist, Mix…).
+
+## Palette de commandes (Ctrl+K)
+
+Appuie sur **Ctrl+K** (ou clique « Rechercher » en haut) et tape ce que tu veux : « météo », « manette » (une playlist), « kwmail » (un projet), « réglages », « suivant »… puis Entrée.
+Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 
 ## Exemples
 
@@ -223,6 +233,9 @@ public/widgets.js    onglet Widgets (pages qui glissent, déplacer, empiler)
 public/web.js        onglet Web (petit navigateur)
 public/player.js     lecteur Spotify intégré (Premium)
 public/projects.js   onglet Projets
+public/palette.js    palette de commandes (Ctrl+K)
+extension/           extension Chrome de Jarvis (affichage de tous les sites dans l'onglet Web)
+launcher/window.mjs  gardien de la fenêtre (charge l'extension)
 public/fonts/        polices Orbitron, Exo 2, Share Tech Mono (licence OFL)
 launcher/            lanceur Windows, icône près de l'horloge, installation
 ```

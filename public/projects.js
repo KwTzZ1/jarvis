@@ -71,9 +71,16 @@ function renderProjects() {
     if (p.description) card.append(el("p", "proj-desc", p.description));
 
     const links = el("div", "proj-links");
-    if (p.site) links.append(projectButton("globe", "Site", p.site, () => window.openInJarvis(p.site)));
-    if (p.repo) links.append(projectButton("github", "GitHub", p.repo, () => window.open(p.repo, "_blank", "noopener")));
-    if (p.host) links.append(projectButton("server", "Hébergement", p.host, () => window.open(p.host, "_blank", "noopener")));
+    // Site public : affiché dans l'onglet Web. Sites où il faut être connecté (GitHub privé, Railway,
+    // claude.ai…) : ouverts dans le navigateur habituel, où la session est déjà ouverte.
+    const needsLogin = (u) => /(^|\.)(github\.com|railway\.(com|app)|claude\.ai|vercel\.com|netlify\.app|discord\.com)$/i.test(new URL(u).hostname) && !/\.up\.railway\.app$/i.test(new URL(u).hostname);
+    if (p.site)
+      links.append(
+        projectButton("globe", "Site", p.site, () => (needsLogin(p.site) ? openExternal(p.site) : window.openInJarvis(p.site))),
+        projectButton("external", "", "Ouvrir le site dans ton navigateur", () => openExternal(p.site)),
+      );
+    if (p.repo) links.append(projectButton("github", "GitHub", p.repo + " (dans ton navigateur, où tu es connecté)", () => openExternal(p.repo)));
+    if (p.host) links.append(projectButton("server", "Hébergement", p.host + " (dans ton navigateur, où tu es connecté)", () => openExternal(p.host)));
     if (p.folder)
       links.append(
         projectButton("folder", "Dossier", p.folder, () =>

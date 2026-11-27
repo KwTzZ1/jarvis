@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Jarvis - affichage des sites",
+  "version": "1.0.0",
+  "description": "Permet d'afficher n'importe quel site dans l'onglet Web de Jarvis. N'agit que dans les onglets de Jarvis (127.0.0.1 / localhost).",
+  "permissions": ["declarativeNetRequest"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1:*/*", "http://localhost:*/*"],
+      "js": ["marker.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": { "128": "icon.png" }
+}

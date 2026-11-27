@@ -22,6 +22,7 @@
     </div>
     <div class="clock"><span id="clockTime">--:--</span><span id="clockDate"></span></div>
     <div class="top-actions">
+      <button class="kbd-hint" id="paletteBtn" type="button" title="Palette de commandes"><i data-icon="zap" data-size="13"></i>Rechercher <kbd>Ctrl K</kbd></button>
       <span class="cost" id="cost" title="Coût IA de cette session"><i data-icon="coins" data-size="14"></i><span id="costValue">0,000 $</span></span>
       <button class="icon-btn" id="voiceToggle" title="Voix de l'assistant"><i data-icon="volume"></i></button>
       <button class="icon-btn" id="wakeToggle" title="Écoute permanente du mot de réveil"><i data-icon="radio"></i></button>
@@ -165,7 +166,7 @@
 
   <!-- Réglages -->
   <div class="modal-bg" id="settings" hidden>
-    <form class="modal" id="settingsForm" autocomplete="off" novalidate>
+    <form class="modal settings-modal" id="settingsForm" autocomplete="off" novalidate>
       <div class="modal-head">
         <h3><i data-icon="settings" data-size="16"></i>Réglages</h3>
         <button type="button" class="icon-btn" id="settingsClose" title="Fermer"><i data-icon="x"></i></button>
@@ -200,5 +201,6 @@
   <script src="widgets.js"></script>
   <script src="web.js"></script>
   <script src="projects.js"></script>
+  <script src="palette.js"></script>
 </body>
 </html>

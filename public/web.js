@@ -77,7 +77,8 @@ function ensureView(tab) {
 async function showUrl(tab, url) {
   const view = ensureView(tab);
   // YouTube a sa propre vue dans Jarvis (le site normal refuse d'être affiché ici).
-  const ytInfo = youtubeTarget(url);
+  // Avec l'extension de Jarvis, le vrai YouTube s'affiche : la vue YouTube maison ne sert que sans elle.
+  const ytInfo = framesUnlocked() ? null : youtubeTarget(url);
   if (ytInfo) {
     tab.url = url;
     return renderYouTube(view, tab, ytInfo);
@@ -91,7 +92,7 @@ async function showUrl(tab, url) {
     return;
   }
   tab.url = info.url;
-  if (!info.embeddable) {
+  if (!info.embeddable && !framesUnlocked()) {
     view.replaceChildren(blockedCard(info.url));
     return;
   }
@@ -150,7 +151,7 @@ async function renderYouTube(view, tab, { v, q }) {
     const out = el("button", "proj-link");
     out.type = "button";
     out.append(iconEl("external", 14), document.createTextNode("Ouvrir sur YouTube (commentaires, abonnement…)"));
-    out.onclick = () => window.open(`https://www.youtube.com/watch?v=${v}`, "_blank", "noopener");
+    out.onclick = () => openExternal(`https://www.youtube.com/watch?v=${v}`);
     wrap.append(player, out);
   }
 
@@ -212,7 +213,7 @@ function blockedCard(url, reason) {
   const btn = el("button", "btn");
   btn.type = "button";
   btn.append(iconEl("external", 16), document.createTextNode(" Ouvrir " + host));
-  btn.onclick = () => window.open(url, "_blank", "noopener");
+  btn.onclick = () => openExternal(url);
   card.append(btn);
   return card;
 }
@@ -333,11 +334,11 @@ $("#webReload").addEventListener("click", () => {
 $("#webHome").addEventListener("click", () => navigate(""));
 $("#webOut").addEventListener("click", () => {
   const tab = currentTab();
-  if (tab) window.open(tab.url.replace(/[?&]igu=1/, ""), "_blank", "noopener");
+  if (tab) openExternal(tab.url.replace(/[?&]igu=1/, ""));
 });
 
 // Jarvis ouvre les liens (« ouvre YouTube ») dans cet onglet plutôt que dans une autre fenêtre.
-window.openInJarvis = (url) => {
+window.openInJarvis = (url = "") => {
   goTo(2);
   navigate(url, { newTab: true });
 };
@@ -358,3 +359,8 @@ function startWebIfVisible() {
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => setTimeout(startWebIfVisible, 0)));
 new MutationObserver(startWebIfVisible).observe($("#pageWeb"), { attributes: true, attributeFilter: ["inert"] });
 startWebIfVisible();
+
+// L'extension vient de s'activer : les pages marquées "refusées" peuvent maintenant s'afficher.
+window.addEventListener("jarvis-frames-ready", () => {
+  for (const t of web.tabs) if (t.view?.querySelector(".web-blocked")) showUrl(t, t.url);
+});
