@@ -254,7 +254,8 @@ Jarvis consomme peu quand il ne sert pas :
 **Raccourcis :**
 - **Ctrl + Espace depuis n'importe quelle appli** : la fenêtre Jarvis passe devant et t'écoute (Réglages → Personnalisation → Raccourci pour parler, pour en choisir un autre ou le couper) ;
 - maintiens **Espace**, ou clique sur le réacteur, pour parler ;
-- l'icône **ondes** active l'écoute permanente ;
+- **dis « Jarvis »** (puis ta demande, d'une traite ou après une pause) : l'écoute s'allume toute seule. Actif par défaut dès que le micro est autorisé ; l'icône **ondes** (ou Réglages → Micro) le coupe ;
+- Jarvis **attend que tu aies fini de parler** : il n'envoie qu'après un vrai silence (1,6 s par défaut, réglable dans Réglages → Micro → Silence avant d'envoyer). En maintenant Espace, c'est le relâchement qui envoie ;
 - l'icône **haut-parleur** coupe ou remet la voix.
 
 ---

@@ -1050,7 +1050,7 @@ if ("speechSynthesis" in window) {
 let speakId = 0;
 // Voix Piper : naturelle, générée sur le PC. Lue phrase par phrase (la suivante se prépare pendant la lecture).
 // Réglages → Micro : micro, sortie audio et volume de la voix (gardés sur ce PC).
-const audioPrefs = Object.assign({ input: "default", output: "default", volume: 1 }, JSON.parse(localStorage.getItem("audioPrefs") || "{}"));
+const audioPrefs = Object.assign({ input: "default", output: "default", volume: 1, pause: 1600 }, JSON.parse(localStorage.getItem("audioPrefs") || "{}"));
 const saveAudioPrefs = () => localStorage.setItem("audioPrefs", JSON.stringify(audioPrefs));
 const audioOuts = new Set();
 // Envoie un son de Jarvis (voix naturelle, bips) vers la sortie choisie ; « default » = celle de Windows.
@@ -1227,22 +1227,29 @@ function startCommand() {
   stopRecognition();
   stopSpeaking();
   recMode = "command";
-  const r = newRecognizer(false);
+  const r = newRecognizer(true);
   rec = r;
-  let finalText = "";
+  // Chrome, seul, coupe à la première petite pause : on écoute en continu et on n'envoie
+  // qu'après un vrai silence (réglable dans Réglages → Micro). Espace maintenu : c'est toi qui décides.
+  let timer = setTimeout(() => r.stop(), 9000); // rien entendu : on arrête
+  const hardStop = setTimeout(() => r.stop(), 60_000);
   r.onresult = (e) => {
-    let interim = "";
-    for (const res of e.results) {
-      if (res.isFinal) finalText += res[0].transcript;
-      else interim += res[0].transcript;
-    }
-    $("#input").value = (finalText + interim).trim();
+    let text = "";
+    for (const res of e.results) text += res[0].transcript;
+    $("#input").value = text.trim();
+    clearTimeout(timer);
+    timer = setTimeout(function check() {
+      if (spaceTalk) return void (timer = setTimeout(check, 400));
+      r.stop();
+    }, audioPrefs.pause);
   };
   r.onerror = (e) => {
     if (MIC_ERRORS[e.error]) toast(MIC_ERRORS[e.error], true);
     else if (e.error === "no-speech") toast("Je n'ai rien entendu.");
   };
   r.onend = () => {
+    clearTimeout(timer);
+    clearTimeout(hardStop);
     if (rec === r) rec = null;
     $("#micBtn").classList.remove("on");
     state.listening = false;
@@ -1291,39 +1298,23 @@ function startWake() {
   recMode = "wake";
   const r = newRecognizer(true);
   rec = r;
+  // « Jarvis » entendu : l'écoute s'allume, on suit la phrase jusqu'à un vrai silence, puis on l'envoie.
+  let from = -1, timer = 0;
   r.onresult = (e) => {
     // On ignore ce que l'on entend pendant que Jarvis réfléchit ou parle (sinon il s'entend lui-même).
     if (state.busy || state.speaking) return;
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const res = e.results[i];
-      const transcript = res[0].transcript;
-      if (!res.isFinal) {
-        if (extractCommand(transcript) !== null) setMode("listening");
-        continue;
-      }
-      wakeErrors = 0;
-      if (awaitingCommand) {
-        awaitingCommand = false;
-        send(transcript);
-        continue;
-      }
-      const command = extractCommand(transcript);
-      if (command === null) {
-        idleMode();
-      } else if (command.length > 2) {
-        send(command);
-      } else {
-        awaitingCommand = true;
-        beepShort();
-        setMode("listening");
-        setTimeout(() => {
-          if (awaitingCommand) {
-            awaitingCommand = false;
-            idleMode();
-          }
-        }, 8000);
-      }
+    wakeErrors = 0;
+    if (from < 0) {
+      for (let i = e.resultIndex; i < e.results.length && from < 0; i++) if (extractCommand(e.results[i][0].transcript) !== null) from = i;
+      if (from < 0) return;
+      setMode("listening");
     }
+    let said = "";
+    for (let i = from; i < e.results.length; i++) said += e.results[i][0].transcript;
+    const command = extractCommand(said) ?? "";
+    $("#input").value = command;
+    clearTimeout(timer);
+    timer = setTimeout(() => r.stop(), command ? audioPrefs.pause : 8000); // juste « Jarvis » : 8 s pour dire la suite
   };
   r.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") {
@@ -1335,8 +1326,15 @@ function startWake() {
     }
   };
   r.onend = () => {
+    clearTimeout(timer);
     if (rec === r) rec = null;
     if (recMode === "wake") recMode = null;
+    if (from >= 0) {
+      const command = $("#input").value.trim();
+      $("#input").value = "";
+      idleMode();
+      if (command.length > 1) send(command);
+    }
     // Relance automatique, en ralentissant s'il y a des erreurs (ex : pas d'internet).
     if (state.wakeOn) setTimeout(startWake, wakeErrors ? Math.min(30000, 2000 * wakeErrors) : 300);
   };
@@ -1363,21 +1361,23 @@ function stopRecognition() {
   $("#micBtn").classList.remove("on");
 }
 
-$("#wakeToggle").onclick = () => {
-  if (!SR) return toast("L'écoute permanente nécessite Chrome ou Edge.", true);
-  state.wakeOn = !state.wakeOn;
-  $("#wakeToggle").classList.toggle("on", state.wakeOn);
-  $("#wakeToggle").title = state.wakeOn ? "Écoute permanente activée (clique pour l'arrêter)" : "Écoute permanente du mot de réveil";
-  if (state.wakeOn) {
+function setWake(on, quiet) {
+  if (on && !SR) return toast("L'écoute permanente nécessite Chrome ou Edge.", true);
+  state.wakeOn = on;
+  localStorage.setItem("wakeOn", on);
+  $("#wakeToggle").classList.toggle("on", on);
+  $("#wakeToggle").title = on ? `Dis « ${state.name} » pour lui parler (clique pour arrêter)` : `Écoute du mot « ${state.name} »`;
+  if (on) {
     wakeErrors = 0;
-    toast(`Écoute permanente activée : dis « ${state.name}, … »`);
+    if (!quiet) toast(`Écoute activée : dis « ${state.name}, … »`);
     startWake();
   } else {
     awaitingCommand = false;
     stopRecognition();
     idleMode();
   }
-};
+}
+$("#wakeToggle").onclick = () => setWake(!state.wakeOn);
 
 const toggleMic = () => (state.listening && recMode === "command" ? rec?.stop() : startCommand());
 $("#micBtn").onclick = toggleMic;
@@ -1802,6 +1802,9 @@ document.addEventListener("visibilitychange", () => {
   const who = state.status.userName ? " " + state.status.userName : "";
   const hello = hour < 6 ? `Encore debout${who} ?` : (hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir") + who + ".";
   addMsg("bot", `${hello} ${state.name} en ligne, tous les systèmes sont opérationnels. Que puis-je faire pour toi ?`);
+  // Mot de réveil actif par défaut (« Jarvis, … ») dès que le micro est autorisé ; on le coupe avec l'icône ondes.
+  if (SR && localStorage.getItem("wakeOn") !== "false")
+    navigator.permissions?.query({ name: "microphone" }).then((p) => p.state === "granted" && !state.wakeOn && setWake(true, true), () => {});
   const s = state.status;
   if (!s.provider) {
     showAiWarning("Il me manque une clé d'IA. Ouvre les réglages en haut à droite : colle ta clé Claude, ou une clé Groq gratuite (console.groq.com).");

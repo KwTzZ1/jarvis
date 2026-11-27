@@ -210,7 +210,15 @@
     testOut.append(iconEl("volume", 14), document.createTextNode("Tester la sortie"));
     const hint = el("p", "help", "Autorise le micro pour voir le nom de tes appareils.");
     const devBox = el("div", "mic-devices");
-    devBox.append(field("Micro (entrée)", inSel));
+    const wakeSel = el("select");
+    wakeSel.append(new Option(`Activée : dis « ${state.name} » pour lui parler`, "on"), new Option("Désactivée", "off"));
+    wakeSel.value = state.wakeOn ? "on" : "off";
+    wakeSel.onchange = () => setWake(wakeSel.value === "on");
+    const pauseSel = el("select");
+    for (const [v, l] of [[1000, "Courte (1 s)"], [1600, "Normale (1,6 s)"], [2500, "Longue (2,5 s)"], [4000, "Très longue (4 s)"]]) pauseSel.append(new Option(l, v));
+    pauseSel.value = String(audioPrefs.pause);
+    pauseSel.onchange = () => ((audioPrefs.pause = +pauseSel.value), saveAudioPrefs());
+    devBox.append(field(`Écoute du mot « ${state.name} »`, wakeSel), field("Silence avant d'envoyer", pauseSel), field("Micro (entrée)", inSel));
     if ("setSinkId" in HTMLMediaElement.prototype) devBox.append(field("Sortie audio", outSel));
     devBox.append(field("Volume de la voix", volRow), testOut, hint);
     sec.append(devBox);
