@@ -1,6 +1,7 @@
 import { synthesize, piperVoices } from "./lib/tts.js";
 import { systemInfo, pcControl, PC_ACTIONS, setClipboard, getClipboard, openApp, APP_IDS, appList, appIconPath } from "./lib/system.js";
 import { hardware } from "./lib/hardware.js";
+import { meterStream } from "./lib/meter.js";
 import { PHONE_PORT, checkToken, phoneInfo, resetPhoneToken, updatePhoneServer } from "./lib/phone.js";
 import "./lib/boot.js";
 import express from "express";
@@ -18,6 +19,7 @@ import * as projects from "./lib/projects.js";
 import { searchVideos, youtubeConfigured } from "./lib/youtube.js";
 import * as images from "./lib/images.js";
 import { spawn } from "child_process";
+import fs from "fs";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_URL = `http://127.0.0.1:${PORT}`;
@@ -29,7 +31,7 @@ app.disable("x-powered-by");
 // n'est pas la nôtre : un site web malveillant ne peut pas s'en servir pour lire tes mails.
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 // Accès téléphone (port à part, réseau local) : il faut la clé secrète, reçue via le QR code.
-const PHONE_BLOCKED = /^\/(api\/settings|api\/phone|api\/events|api\/hotkey|auth\/)/;
+const PHONE_BLOCKED = /^\/(api\/settings|api\/phone|api\/events|api\/hotkey|api\/audio-level|api\/open-settings|auth\/)/;
 app.use((req, res, next) => {
   if (req.socket.localPort !== PHONE_PORT) return next();
   const cookie = /(?:^|;\s*)jarvis_k=([a-f0-9]+)/.exec(req.headers.cookie || "")?.[1];
@@ -86,6 +88,7 @@ function status() {
     uiSounds: process.env.UI_SOUNDS !== "false",
     theme: process.env.THEME || "jarvis",
     hotkey: process.env.HOTKEY || "ctrl+space",
+    musicSphere: process.env.MUSIC_SPHERE !== "false",
     youtube: youtubeConfigured(),
     piper: piperVoices(),
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
@@ -129,6 +132,31 @@ app.get("/api/events", (req, res) => {
 app.post("/api/hotkey", (req, res) => {
   if (eventClients.size) for (const c of eventClients) c.write("event: listen\ndata: 1\n\n");
   else listenAt = Date.now();
+  res.json({ ok: true });
+});
+// Niveau du son du PC en direct (la sphère danse sur la musique).
+app.get("/api/audio-level", meterStream);
+// Réglages du micro : autorisation de la fenêtre Jarvis (Chrome / Edge) ou confidentialité de Windows.
+app.post("/api/open-settings/:which", (req, res) => {
+  const run = (exe, args) => {
+    const child = spawn(exe, args, { detached: true, stdio: "ignore" });
+    child.on("error", () => {});
+    child.unref();
+  };
+  if (req.params.which === "micro-windows") run("rundll32.exe", ["url.dll,FileProtocolHandler", "ms-settings:privacy-microphone"]);
+  else if (req.params.which === "micro-fenetre") {
+    const local = process.env.LOCALAPPDATA || "";
+    const browser = [
+      `${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${process.env["ProgramFiles(x86)"]}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${local}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${process.env["ProgramFiles(x86)"]}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${process.env.ProgramFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    ].find((p) => fs.existsSync(p));
+    if (!browser) return res.status(404).json({ error: "Chrome ou Edge introuvable." });
+    const site = encodeURIComponent(`http://127.0.0.1:${PORT}`);
+    run(browser, [`--user-data-dir=${local}\\Jarvis\\fenetre`, `chrome://settings/content/siteDetails?site=${site}`]);
+  } else return res.status(400).json({ error: "Réglage inconnu." });
   res.json({ ok: true });
 });
 // Ouvre une appli de la liste fermée (ex. le Gestionnaire des tâches depuis une fiche).

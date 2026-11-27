@@ -1166,3 +1166,13 @@ body.orb-mini .core-readout, body.convo .core-readout { opacity: 0 !important; }
   .app-name { font-size: 10.5px; }
 }
 @keyframes appRing { from { opacity: .9; scale: .6; } to { opacity: 0; scale: 1.5; } }
+
+/* ----- Réglages → Micro ----- */
+.mic-row { display: flex; align-items: center; gap: 14px; margin: 4px 0 8px; }
+.mic-btn { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.mic-meter { position: relative; flex: 1; height: 8px; border-radius: 8px; background: rgba(255, 255, 255, .06); overflow: hidden; opacity: .45; transition: opacity .3s; }
+.mic-meter.on { opacity: 1; }
+.mic-meter i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: inherit; background: linear-gradient(90deg, rgba(var(--core-rgb), .5), rgb(var(--core-rgb))); box-shadow: 0 0 10px rgba(var(--core-rgb), .6); transition: width .08s linear; }
+.mic-fix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.mic-fix[hidden] { display: none; }
+.mic-fix p { flex-basis: 100%; margin: 0; }

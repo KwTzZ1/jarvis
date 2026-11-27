@@ -203,6 +203,7 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 - **Sur les autres onglets**, elle se réduit en bas à droite : un clic dessus ramène à l'Assistant.
 - **Autour de la sphère, six points sur l'état du PC** : processeur, carte graphique, mémoire, disque, réseau et système, avec leur valeur en direct. Passe la souris sur un point : une fiche détaillée s'ouvre (modèle, utilisation et sa courbe, fréquence, température, mémoire vidéo, ventilateur, programmes qui prennent le plus de mémoire, place libre, débit…) et la sphère s'illumine de ce côté. Un clic épingle la fiche (avec un raccourci vers le Gestionnaire des tâches), Échap la ferme. Un point passe au rouge si ça chauffe ou sature. Les relevés ne tournent que quand les points sont à l'écran.
 - **Anneaux autour de la sphère** : un minuteur en cours dessine un anneau lumineux qui se vide (avec le temps restant sous « JARVIS », pulsation dans les 10 dernières secondes, clignotement à la fin) ; la musique qui joue dessine un anneau blanc qui avance avec le morceau. Ils restent visibles sur la mini-sphère des autres onglets.
+- **La sphère danse sur la musique** : dès que le PC joue du son (Spotify, YouTube, jeux…), elle grossit au rythme, lance des pics de quatre côtés à chaque coup et s'éclaire. Jarvis lit seulement le niveau du son (le vumètre de Windows) : rien n'est enregistré, et la lecture s'arrête quand la fenêtre est réduite. Réglages → Personnalisation → Sphère qui danse sur le son, pour la couper.
 - **Thèmes de couleur** (Réglages → Personnalisation) : Jarvis (bleu), Mark (rouge et or), Émeraude, Glace, Nébuleuse. Un clic sur une pastille montre tout de suite le résultat ; « Enregistrer » le garde.
 - **Sons d'interface** : petits bips discrets (notifications, erreurs, écoute, réponse, ouverture de l'aperçu, lancement d'une appli, survol des points du PC). Réglages → Personnalisation → Sons de l'interface pour les couper.
 - **Température du processeur** : Windows ne la donne pas. Lance [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (gratuit, en administrateur) et Jarvis l'affiche tout seul. Celle de la carte graphique NVIDIA est lue directement.
@@ -237,6 +238,8 @@ Réglages → **Voix** : choisis la voix, la vitesse et la hauteur (plus grave =
 Le bouton **Style Jarvis** règle tout en un clic (voix masculine, grave et posée).
 
 **Voix naturelle (Piper)** : si Piper est installé dans `%LOCALAPPDATA%\Jarvis\piper` (avec ses voix dans `voices/`), Jarvis parle avec une voix naturelle générée sur ton PC, sans internet. Choix du « Moteur » dans Réglages → Voix (Tom = homme, UPMC = autre voix), ou retour à la voix du navigateur.
+
+**Micro** : Réglages → **Micro**. Le bouton « Autoriser le micro » fait demander l'autorisation par la fenêtre (une seule fois), puis « Tester le micro » affiche une barre qui suit ta voix. Si le micro est bloqué, deux boutons ouvrent l'autorisation de la fenêtre Jarvis (Micro → Autoriser) et les réglages Windows du micro.
 
 **Images dans le chat** : clique sur une image (envoyée ou reçue) pour l'afficher en grand ; flèches pour passer de l'une à l'autre, Échap pour fermer.
 

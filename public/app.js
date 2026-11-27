@@ -1655,6 +1655,7 @@ async function openSettings(focusSection) {
     content.append(sec);
   }
   content.append(voiceSection(nav));
+  if (window.micSection) content.append(micSection(nav));
   phoneQr(content);
   $("#settings").hidden = false;
   const target = focusSection && [...content.querySelectorAll(".set-section")].find((x) => x.id.includes(focusSection));

@@ -96,12 +96,32 @@
     const c = reactor.classList;
     if (c.contains("offline")) return "offline";
     if (typeof state !== "undefined" && state.speaking) return "speaking"; // suit la voix, quoi qu'affiche l'écran
-    return c.contains("listening") ? "listening" : c.contains("thinking") ? "thinking" : c.contains("speaking") ? "speaking" : "idle";
+    const base = c.contains("listening") ? "listening" : c.contains("thinking") ? "thinking" : c.contains("speaking") ? "speaking" : "idle";
+    return base === "idle" && performance.now() < musicUntil ? "music" : base;
   };
   const isMini = () => !!document.body.dataset.page && document.body.dataset.page !== "0";
 
   let energy = 0.2, spin = 0, color = [...COLORS.idle], skip = false, frameNo = 0, lastRgb = "", lvl = 0, emitA = 0, fAmt = 0, fx = 1, fy = 0;
   const tips = [];
+
+  // Musique : niveau du son qui sort du PC (vumètre de Windows, rien n'est enregistré). La sphère danse dessus.
+  let meter = 0, meterAt = -1e9, meterES = null, peakRef = 0.06, musAvg = 0, musicUntil = 0, mn = 0, beat = 0;
+  window.jarvisCore.feedMeter = (v) => ((meter = v), (meterAt = performance.now()));
+  const onPc = ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname);
+  function meterSync() {
+    const want = onPc && !document.hidden && state.status?.musicSphere !== false;
+    if (want && !meterES) {
+      meterES = new EventSource("/api/audio-level");
+      meterES.onmessage = (e) => window.jarvisCore.feedMeter(+e.data || 0);
+    } else if (!want && meterES) {
+      meterES.close();
+      meterES = null;
+      meter = 0;
+    }
+  }
+  document.addEventListener("visibilitychange", meterSync);
+  hooks.status.push(meterSync);
+  meterSync();
   const buf = new Uint8Array(128);
   function voiceLevel() {
     const an = window.jarvisCore.analyser;
@@ -124,25 +144,36 @@
     // Au repos ou en mini, une image sur deux suffit (moitié moins de calcul) ; pleine vitesse quand il parle, écoute ou réfléchit.
     if ((mini || m === "idle" || m === "offline") && (skip = !skip)) return requestAnimationFrame(frame);
     const t = now / 1000;
+    // Musique : niveau normalisé (volume bas ou fort, la sphère danse pareil) et coups marqués (grosse caisse…).
+    const mv = now - meterAt < 600 ? meter : 0;
+    peakRef = Math.max(mv, peakRef * 0.997, 0.06);
+    mn = Math.min(1, mv / peakRef);
+    musAvg += (mn - musAvg) * 0.06;
+    beat = Math.max(0, mn - musAvg * 1.08) * 2.4;
+    if (mn > 0.12) musicUntil = now + 1500;
     const level = voiceLevel();
     // Volume de la voix, lissé : monte vite, redescend doucement. Sans analyse du son : rythme de parole simulé.
-    const raw = m === "speaking" ? level ?? Math.max(0, Math.sin(t * 9.1) * Math.sin(t * 3.7 + 1)) ** 0.7 * (0.65 + 0.35 * Math.sin(t * 1.3)) : 0;
+    const raw = m === "speaking" ? level ?? Math.max(0, Math.sin(t * 9.1) * Math.sin(t * 3.7 + 1)) ** 0.7 * (0.65 + 0.35 * Math.sin(t * 1.3)) : m === "music" ? Math.min(1, beat * 1.3 + mn * 0.2) : 0;
     lvl = raw > lvl ? lvl + (raw - lvl) * 0.5 : lvl * 0.9;
     const target = {
       idle: 0.18 + 0.05 * Math.sin(t * 1.3),
       listening: 0.6,
       thinking: 0.42,
       speaking: 0.35 + lvl * 0.65,
+      music: 0.3 + mn * 0.55,
       offline: 0.05,
     }[m];
-    energy += (target - energy) * 0.1;
-    spin += { idle: 0.003, listening: 0.006, thinking: 0.022, speaking: 0.008, offline: 0.0008 }[m];
-    const want = COLORS[m];
+    energy += (target - energy) * (m === "music" ? 0.3 : 0.1);
+    spin += { idle: 0.003, listening: 0.006, thinking: 0.022, speaking: 0.008, music: 0.005 + mn * 0.012, offline: 0.0008 }[m];
+    const want = COLORS[m === "music" ? "idle" : m];
     color = color.map((c, i) => c + (want[i] - c) * 0.07);
-    const [cr, cg, cb] = color.map(Math.round);
+    const uiRgb = color.map(Math.round).join(",");
+    // Sur la musique, la sphère s'éclaire à chaque coup (l'interface, elle, garde sa couleur : moins de calcul).
+    const tint = m === "music" ? Math.min(0.55, mn * 0.3 + beat * 0.45) : 0;
+    const [cr, cg, cb] = color.map((c, i) => Math.round(c + (COLORS.speaking[i] - c) * tint));
     const rgb = `${cr},${cg},${cb}`;
     // Toute l'interface suit la couleur de la sphère (bleu, mauve quand il parle) ; mise à jour seulement si elle change.
-    if (rgb !== lastRgb && frameNo++ % 4 === 0) document.documentElement.style.setProperty("--core-rgb", (lastRgb = rgb));
+    if (uiRgb !== lastRgb && frameNo++ % 4 === 0) document.documentElement.style.setProperty("--core-rgb", (lastRgb = uiRgb));
     const cx = W / 2, cy = H / 2;
     const rad = R * (1 + energy * 0.1);
 
@@ -159,13 +190,19 @@
     const cosY = Math.cos(spin), sinY = Math.sin(spin);
     const tilt = 0.3 + Math.sin(t * 0.21) * 0.12;
     const cosX = Math.cos(tilt), sinX = Math.sin(tilt);
-    const amp = m === "speaking" ? 0.04 + energy * 0.08 : m === "listening" ? 0.08 : 0.04;
-    const tt = t * (m === "speaking" ? 2 : m === "thinking" ? 1.5 : 0.6);
+    const amp = m === "speaking" ? 0.04 + energy * 0.08 : m === "music" ? 0.04 + energy * 0.07 : m === "listening" ? 0.08 : 0.04;
+    const tt = t * (m === "speaking" ? 2 : m === "music" ? 1.4 : m === "thinking" ? 1.5 : 0.6);
     // Pics de la voix : une zone du contour (qui tourne doucement) lance des pointes au rythme de la voix,
     // une seconde zone, à l'opposé, répond plus faiblement.
-    emitA += 0.004 + lvl * 0.02;
-    const e1x = Math.cos(emitA) * 0.958, e1y = Math.sin(emitA) * 0.958, e1z = 0.287;
-    const e2x = Math.cos(emitA + 2.7) * 0.98, e2y = Math.sin(emitA + 2.7) * 0.98, e2z = 0.196;
+    emitA += 0.004 + lvl * (m === "music" ? 0.03 : 0.02);
+    // Zones qui lancent les pics : deux quand il parle (une forte, une qui répond), quatre réparties sur la musique.
+    const em =
+      m === "music"
+        ? [0, 1, 2, 3].map((i) => [Math.cos(emitA + i * 1.571) * 0.958, Math.sin(emitA + i * 1.571) * 0.958, 0.287, 0.5, 2, 0.85])
+        : [
+            [Math.cos(emitA) * 0.958, Math.sin(emitA) * 0.958, 0.287, 0.5, 2, 1],
+            [Math.cos(emitA + 2.7) * 0.98, Math.sin(emitA + 2.7) * 0.98, 0.196, 0.6, 2.5, 0.5],
+          ];
     const rays = lvl > 0.03 ? new Path2D() : null;
     // Point du PC survolé : la sphère s'illumine et se gonfle doucement de son côté.
     const fc = window.jarvisCore.focus;
@@ -182,9 +219,11 @@
       const z2 = py * sinX + z1 * cosX;
       let g = 1;
       if (rays) {
-        const i1 = Math.max(0, (x1 * e1x + y2 * e1y + z2 * e1z - 0.5) * 2);
-        const i2 = Math.max(0, (x1 * e2x + y2 * e2y + z2 * e2z - 0.6) * 2.5);
-        const inf = i1 * i1 + 0.5 * i2 * i2;
+        let inf = 0;
+        for (const e of em) {
+          const d = Math.max(0, (x1 * e[0] + y2 * e[1] + z2 * e[2] - e[3]) * e[4]);
+          inf += e[5] * d * d;
+        }
         if (inf > 0) {
           g += lvl * inf * (0.12 + p.sp * 0.95) * (0.55 + 0.45 * Math.sin(t * p.f + p.k));
           if (g > 1.12) {
