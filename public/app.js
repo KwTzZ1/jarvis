@@ -112,7 +112,7 @@ function tick() {
   const now = new Date();
   $("#clockTime").textContent = now.toLocaleTimeString("fr-FR");
   $("#clockDate").textContent = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  emit("tick");
+  if (!document.hidden) emit("tick");
 }
 setInterval(tick, 1000);
 tick();
@@ -169,9 +169,14 @@ function applyStatus(s) {
   }
 }
 
+let lastStatusJson = "";
 async function loadStatus() {
   try {
-    applyStatus(await api("/api/status"));
+    const s = await api("/api/status");
+    const json = JSON.stringify(s);
+    if (json === lastStatusJson && !state.offline) return; // rien de neuf : on ne redessine pas
+    lastStatusJson = json;
+    applyStatus(s);
     if (state.offline) {
       state.offline = false;
       toast("Reconnecté au serveur Jarvis.");
@@ -560,8 +565,13 @@ setInterval(() => !document.hidden && tickTimelines(), 1000);
 
 async function refreshMusic() {
   try {
-    cache.music = await api("/api/music");
+    const r = await api("/api/music");
+    const key = (m) => JSON.stringify(m && (m.data ? [m.data.uri, m.data.title, m.data.playing, m.data.device, m.data.image, m.data.durationMs] : m));
+    const same = cache.music && key(cache.music) === key(r);
+    cache.music = r;
     cache.music.at = Date.now(); // pour faire avancer la timeline entre deux mises à jour
+    // Même morceau, même état : on ne redessine rien, seule la timeline se recale.
+    if (same) return tickTimelines();
     renderMusicInto($("#music"), cache.music);
     emit("music");
   } catch {
@@ -1034,8 +1044,45 @@ if ("speechSynthesis" in window) {
 }
 
 let speakId = 0;
+// Voix Piper : naturelle, générée sur le PC. Lue phrase par phrase (la suivante se prépare pendant la lecture).
+let piperAudio = null;
+const usePiper = () => voicePrefs.engine !== "browser" && (state.status?.piper || []).length > 0;
+function piperChunk(text) {
+  return fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, voice: voicePrefs.piperVoice, rate: voicePrefs.rate }) }).then((r) => {
+    if (!r.ok) throw new Error("tts");
+    return r.blob();
+  });
+}
+function speakPiper(parts, id, done) {
+  let i = 0;
+  let next = piperChunk(parts[0]);
+  const playNext = () => {
+    if (id !== speakId) return;
+    if (i >= parts.length) return done();
+    const current = next;
+    i++;
+    next = i < parts.length ? piperChunk(parts[i]) : null;
+    current.then(
+      (blob) => {
+        if (id !== speakId) return;
+        const url = URL.createObjectURL(blob);
+        piperAudio = new Audio(url);
+        piperAudio.onended = piperAudio.onerror = () => (URL.revokeObjectURL(url), playNext());
+        piperAudio.play().catch(playNext);
+      },
+      () => {
+        // Piper en panne : on repasse sur la voix du navigateur pour ce message.
+        if (id !== speakId) return;
+        voicePrefs.engine = "browser-once";
+        speak(parts.slice(i - 1).join(" "), true);
+        delete voicePrefs.engine;
+      },
+    );
+  };
+  playNext();
+}
 function speak(text, force = false) {
-  if (!("speechSynthesis" in window) || (!state.voiceOn && !force)) return idleMode();
+  if ((!("speechSynthesis" in window) && !usePiper()) || (!state.voiceOn && !force)) return idleMode();
   const clean = text.replace(/[*_#`>]/g, "").replace(/https?:\/\/\S+/g, "le lien").trim();
   if (!clean) return idleMode();
   // Chrome coupe les longues phrases (environ 15 s) : on lit le texte morceau par morceau.
@@ -1049,7 +1096,8 @@ function speak(text, force = false) {
   }
   if (cur.trim()) parts.push(cur);
   const id = ++speakId;
-  speechSynthesis.cancel();
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  piperAudio?.pause();
   state.speaking = true;
   setMode("speaking");
   const done = () => {
@@ -1057,6 +1105,7 @@ function speak(text, force = false) {
     state.speaking = false;
     idleMode();
   };
+  if (usePiper()) return speakPiper(parts.map((p) => p.trim()).filter(Boolean), id, done);
   // Petit délai : Chrome ignore parfois une lecture lancée juste après cancel().
   setTimeout(() => {
     if (id !== speakId) return;
@@ -1079,6 +1128,7 @@ function stopSpeaking() {
   speakId++;
   state.speaking = false;
   if ("speechSynthesis" in window) speechSynthesis.cancel();
+  piperAudio?.pause();
 }
 
 function renderVoiceToggle() {
@@ -1376,6 +1426,30 @@ function voiceSection(nav) {
     pickVoice();
   };
   row("Voix", sel);
+  // Voix naturelle Piper (si installée).
+  const pv = state.status?.piper || [];
+  if (pv.length) {
+    const eng = el("select");
+    const label = (v) => "Naturelle : " + v.replace(/^fr_FR-/, "").replace(/-medium$/, "").replace(/^\w/, (c) => c.toUpperCase());
+    for (const v of pv) {
+      const o = el("option", null, label(v));
+      o.value = "piper:" + v;
+      eng.append(o);
+    }
+    const b = el("option", null, "Voix du navigateur (choix ci-dessous)");
+    b.value = "browser";
+    eng.append(b);
+    eng.value = voicePrefs.engine === "browser" ? "browser" : "piper:" + (pv.includes(voicePrefs.piperVoice) ? voicePrefs.piperVoice : pv.find((v) => v.includes("tom")) || pv[0]);
+    eng.onchange = () => {
+      if (eng.value === "browser") voicePrefs.engine = "browser";
+      else {
+        delete voicePrefs.engine;
+        voicePrefs.piperVoice = eng.value.slice(6);
+      }
+      saveVoicePrefs();
+    };
+    row("Moteur", eng);
+  }
   // Préréglage "Jarvis" : voix masculine posée, un peu grave, débit vif.
   const jarvis = el("button", "proj-link set-link");
   jarvis.type = "button";
@@ -1655,9 +1729,10 @@ document.addEventListener("visibilitychange", () => {
   checkTimers(true);
   refreshAll();
   refreshMusic();
-  setInterval(refreshMusic, 10000);
-  setInterval(refreshAll, 5 * 60 * 1000);
-  setInterval(loadStatus, 15000);
+  // Fenêtre réduite : on ne demande rien (tout se remet à jour au retour).
+  setInterval(() => !document.hidden && refreshMusic(), 10000);
+  setInterval(() => !document.hidden && refreshAll(), 5 * 60 * 1000);
+  setInterval(() => !document.hidden && loadStatus(), 15000);
 })();
 
 // ---------- Visionneuse : un clic sur une image du chat l'affiche en grand ----------

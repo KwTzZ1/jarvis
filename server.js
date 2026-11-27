@@ -1,3 +1,4 @@
+import { synthesize, piperVoices } from "./lib/tts.js";
 import "./lib/boot.js";
 import express from "express";
 import * as google from "./lib/google.js";
@@ -64,6 +65,7 @@ function status() {
     webEngine: process.env.WEB_ENGINE || "google",
     uiSounds: process.env.UI_SOUNDS !== "false",
     youtube: youtubeConfigured(),
+    piper: piperVoices(),
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
     spotify: {
       configured: spotify.spotifyConfigured(),
@@ -71,12 +73,23 @@ function status() {
       playerAllowed: spotify.spotifyConnected() && spotify.playerAllowed(),
       playerReady: spotify.playerReady(),
       scopesOk: spotify.spotifyConnected() && spotify.scopesOk(),
+      canEdit: spotify.spotifyConnected() && spotify.canEditPlaylists(),
     },
     usage: usageTotals,
   };
 }
 
 app.get("/api/status", (req, res) => res.json(status()));
+
+// Voix naturelle (Piper, sur le PC).
+app.post(
+  "/api/tts",
+  wrap(async (req, res) => {
+    const { text, voice, rate } = req.body || {};
+    const wav = await synthesize(text, { voice, rate });
+    res.set({ "Content-Type": "audio/wav", "Cache-Control": "no-store" }).send(wav);
+  }),
+);
 
 // ---------- Réglages ----------
 app.get("/api/settings", (req, res) => res.json({ fields: publicSettings() }));
@@ -192,6 +205,29 @@ app.get(
   wrap(async (req, res) => {
     if (!spotify.spotifyConnected()) return res.status(404).json({ error: "Spotify n'est pas connecté." });
     res.json({ playlists: await spotify.myPlaylists(req.query.refresh === "1") });
+  }),
+);
+const TRACK_URI = /^spotify:track:[A-Za-z0-9]{1,40}$/;
+const PLAYLIST_ID = /^[A-Za-z0-9]{1,40}$/;
+app.get(
+  "/api/spotify/search",
+  wrap(async (req, res) => {
+    if (!spotify.spotifyConnected()) return res.status(404).json({ error: "Spotify n'est pas connecté." });
+    const q = String(req.query.q || "").trim();
+    res.json({ tracks: q ? await spotify.searchTracks(q) : [] });
+  }),
+);
+app.post(
+  "/api/spotify/track",
+  wrap(async (req, res) => {
+    const { uri, playlistId, newPlaylist } = req.body || {};
+    if (!TRACK_URI.test(String(uri))) return res.status(400).json({ error: "Titre inconnu." });
+    if (typeof newPlaylist === "string" && newPlaylist.trim()) return res.json(await spotify.createPlaylist(newPlaylist.trim(), uri));
+    if (playlistId !== undefined) {
+      if (!PLAYLIST_ID.test(String(playlistId))) return res.status(400).json({ error: "Playlist inconnue." });
+      return res.json(await spotify.addToPlaylist(playlistId, uri));
+    }
+    res.json(await spotify.playTrack(uri));
   }),
 );
 app.get(

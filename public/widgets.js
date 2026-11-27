@@ -151,7 +151,8 @@ const WIDGET_TYPES = {
   clock: { title: "Horloge", icon: "clock", size: "s", render: renderClockWidget },
   ask: { title: "Demande à Jarvis", icon: "message", size: "m", render: renderAskWidget },
   weather: { title: "Météo", icon: "cloud-sun", size: "m", render: (b) => renderWeatherInto(b, cache.dashboard?.weather) },
-  music: { title: "Spotify", icon: "music", size: "l", render: renderSpotifyWidget },
+  music: { title: "Playlists Spotify", icon: "music", size: "l", render: renderSpotifyWidget },
+  spsearch: { title: "Spotify", icon: "headphones", size: "t", render: renderSpotifySearchWidget },
   agenda: { title: "Agenda", icon: "calendar", size: "t", render: (b) => renderListWidget(b, "events") },
   mails: { title: "Mails non lus", icon: "mail", size: "t", render: renderMailWidget },
   tasks: { title: "Tâches", icon: "tasks", size: "t", render: (b) => renderListWidget(b, "tasks") },
@@ -167,12 +168,12 @@ const SIZE_LABELS = { s: "petit", m: "large", t: "haut", l: "grand" };
 // Quelles données redessinent quels widgets.
 const WIDGET_DEPS = {
   data: ["weather", "agenda", "mails", "tasks", "memory"],
-  music: ["music"],
+  music: ["music", "spsearch"],
   timers: ["timers"],
   reply: ["ask"],
   tick: ["clock"],
   discord: ["discord"],
-  status: ["discord"],
+  status: ["discord", "spsearch"],
   images: ["images"],
 };
 for (const [hook, types] of Object.entries(WIDGET_DEPS)) hooks[hook].push(() => renderTypes(types));
@@ -347,9 +348,119 @@ function openPlaylist(body, p) {
   );
 }
 
+// Spotify : recherche de titres, lecture, ajout à une playlist (ou nouvelle playlist).
+function renderSpotifySearchWidget(body) {
+  const sp = state.status?.spotify;
+  if (!sp?.connected) return body.replaceChildren(el("div", "muted", "Connecte Spotify dans les réglages."));
+  if (body.querySelector(".sps-form")) return markPlaying(body);
+  body.classList.add("sps");
+  const form = el("form", "sps-form");
+  const input = el("input");
+  input.type = "search";
+  input.placeholder = "Chercher un titre, un artiste…";
+  const go = el("button", "mini-icon");
+  go.type = "submit";
+  go.title = "Chercher";
+  go.append(iconEl("arrow-up", 14));
+  go.querySelector(".ic").style.transform = "rotate(90deg)";
+  form.append(input, go);
+  const list = el("ul", "sps-list");
+  list.append(el("li", "muted", "Tape un titre puis Entrée. ▶ pour écouter, + pour l'ajouter à une playlist."));
+  body.replaceChildren(form, list);
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (!q) return;
+    list.replaceChildren(el("li", "muted", "Recherche…"));
+    try {
+      const { tracks } = await api(`/api/spotify/search?q=${encodeURIComponent(q)}`);
+      list.replaceChildren();
+      if (!tracks.length) return list.append(el("li", "muted", "Aucun résultat."));
+      for (const t of tracks) list.append(searchResult(t));
+      markPlaying(body);
+    } catch (err) {
+      list.replaceChildren(el("li", "muted", err.message));
+    }
+  };
+}
+
+function searchResult(t) {
+  const li = el("li");
+  const row = el("div", "spw-track sps-row");
+  row.dataset.uri = t.uri;
+  const pic = el("div", "spw-t-pic");
+  if (t.image) {
+    const img = el("img");
+    img.src = t.image;
+    img.alt = "";
+    img.loading = "lazy";
+    pic.append(img);
+  }
+  const txt = el("div", "spw-t-txt");
+  txt.append(el("div", "spw-t-name", t.name), el("div", "spw-t-artist", t.artist));
+  const play = el("button", "mini-icon");
+  play.type = "button";
+  play.title = "Écouter";
+  play.append(iconEl("play", 13));
+  play.onclick = () => api("/api/spotify/track", { method: "POST", body: { uri: t.uri } }).then(() => setTimeout(refreshMusic, 800), (e) => toast(e.message, true));
+  const add = el("button", "mini-icon");
+  add.type = "button";
+  add.title = "Ajouter à une playlist";
+  add.append(iconEl("plus", 13));
+  add.onclick = () => togglePlaylistPicker(li, t);
+  row.append(pic, txt, el("span", "spw-t-dur", fmtDuration(t.duration)), play, add);
+  li.append(row);
+  return li;
+}
+
+// Petit menu sous le titre : choisir une playlist ou en créer une.
+function togglePlaylistPicker(li, t) {
+  const open = li.querySelector(".sps-pick");
+  document.querySelectorAll(".sps-pick").forEach((p) => p.remove());
+  if (open) return;
+  const box = el("div", "sps-pick");
+  const done = (msg) => (toast(msg), box.remove(), playlistViews.clear());
+  const fail = (e) => toast(e.message, true);
+  const fill = () => {
+    box.replaceChildren();
+    const mine = spotifyLib.playlists || [];
+    for (const p of mine) {
+      const b = el("button", "sps-pl", p.name);
+      b.type = "button";
+      b.onclick = () => api("/api/spotify/track", { method: "POST", body: { uri: t.uri, playlistId: p.id } }).then(() => done(`Ajouté à ${p.name}`), fail);
+      box.append(b);
+    }
+    const nb = el("form", "sps-new");
+    const name = el("input");
+    name.placeholder = "Nouvelle playlist…";
+    const ok = el("button", "mini-icon");
+    ok.type = "submit";
+    ok.title = "Créer et ajouter";
+    ok.append(iconEl("plus", 13));
+    nb.append(name, ok);
+    nb.onsubmit = (e) => {
+      e.preventDefault();
+      if (!name.value.trim()) return;
+      api("/api/spotify/track", { method: "POST", body: { uri: t.uri, newPlaylist: name.value.trim() } }).then((r) => {
+        spotifyLib.playlists = null;
+        loadPlaylists();
+        done(`Playlist « ${r.name} » créée`);
+      }, fail);
+    };
+    box.append(nb);
+  };
+  if (!state.status?.spotify?.canEdit) box.append(el("div", "hint", "Pour ajouter à tes playlists : Réglages > Spotify > Déconnecter puis Connecter (nouvelle autorisation)."));
+  else if (spotifyLib.playlists) fill();
+  else {
+    box.append(el("div", "muted", "Chargement…"));
+    loadPlaylists().then(fill);
+  }
+  li.append(box);
+}
+
 function markPlaying(body) {
   const uri = cache.music?.data?.uri;
-  body.querySelectorAll(".spw-track").forEach((b) => b.classList.toggle("playing", !!uri && b.dataset.uri === uri));
+  body.querySelectorAll(".spw-track[data-uri]").forEach((b) => b.classList.toggle("playing", !!uri && b.dataset.uri === uri));
 }
 
 // Mails : expéditeur, objet, aperçu et heure ; clic = résumé par Jarvis.

@@ -209,6 +209,7 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
   - **pince** (deux doigts sur écran tactile) ou **Ctrl + molette** sur un widget pour l'agrandir ou le réduire.
 - **En direct** :
   - Spotify : titre en cours avec une timeline (clique ou glisse pour avancer), pochettes de tes playlists ; un clic lance la playlist et l'ouvre dans le widget avec tous ses titres (clic sur un titre pour le jouer, flèche pour revenir) ;
+  - **Spotify (recherche)** : cherche un titre, ▶ pour l'écouter, + pour l'ajouter à une de tes playlists ou en créer une nouvelle (la première fois : Réglages → Spotify → Déconnecter puis Connecter, pour donner l'autorisation de modifier tes playlists) ;
   - Discord : messages du salon mis à jour toutes les 5 secondes, avec avatars ; les nouveaux s'allument ;
   - Mails : expéditeur, heure, objet et début du message ;
   - le reste se met à jour toutes les minutes tant que la page Widgets est ouverte.
@@ -217,6 +218,8 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 
 Réglages → **Voix** : choisis la voix, la vitesse et la hauteur (plus grave = plus « majordome »), puis « Tester ».
 Le bouton **Style Jarvis** règle tout en un clic (voix masculine, grave et posée).
+
+**Voix naturelle (Piper)** : si Piper est installé dans `%LOCALAPPDATA%\Jarvis\piper` (avec ses voix dans `voices/`), Jarvis parle avec une voix naturelle générée sur ton PC, sans internet. Choix du « Moteur » dans Réglages → Voix (Tom = homme, UPMC = autre voix), ou retour à la voix du navigateur.
 
 **Images dans le chat** : clique sur une image (envoyée ou reçue) pour l'afficher en grand ; flèches pour passer de l'une à l'autre, Échap pour fermer.
 

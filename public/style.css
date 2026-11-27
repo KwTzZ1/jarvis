@@ -596,3 +596,16 @@ body.asleep .grid-bg { display: none; }
 .sp-time:hover .sp-seek::-webkit-slider-thumb, .sp-seek:focus::-webkit-slider-thumb { opacity: 1; }
 .sp-time:hover .sp-seek::-webkit-slider-runnable-track { height: 6px; }
 .sp-time:hover .sp-seek::-webkit-slider-thumb { margin-top: -3px; }
+
+/* Widget Spotify : recherche */
+.widget-body.sps { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.sps-form { display: flex; gap: 6px; flex-shrink: 0; }
+.sps-form input { flex: 1; min-width: 0; }
+.sps-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+.sps-row { cursor: default; }
+.sps-row .mini-icon { flex-shrink: 0; cursor: pointer; }
+.sps-pick { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 8px 44px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: rgba(0, 229, 255, .04); max-height: 180px; overflow-y: auto; }
+.sps-pl { padding: 5px 8px; border: none; border-radius: 6px; background: none; color: var(--text); text-align: left; font-size: 12px; cursor: pointer; }
+.sps-pl:hover { background: rgba(0, 229, 255, .12); color: var(--cyan); }
+.sps-new { display: flex; gap: 6px; margin-top: 4px; }
+.sps-new input { flex: 1; min-width: 0; font-size: 12px; }
