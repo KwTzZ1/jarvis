@@ -1,5 +1,6 @@
 import { synthesize, piperVoices } from "./lib/tts.js";
-import { systemInfo, pcControl, PC_ACTIONS, setClipboard, getClipboard } from "./lib/system.js";
+import { systemInfo, pcControl, PC_ACTIONS, setClipboard, getClipboard, openApp, APP_IDS } from "./lib/system.js";
+import { hardware } from "./lib/hardware.js";
 import { PHONE_PORT, checkToken, phoneInfo, resetPhoneToken, updatePhoneServer } from "./lib/phone.js";
 import "./lib/boot.js";
 import express from "express";
@@ -101,6 +102,13 @@ function status() {
 app.get("/api/status", (req, res) => res.json(status()));
 
 app.get("/api/system", wrap(async (req, res) => res.json(await systemInfo())));
+// Détail du PC pour les points autour de la sphère (relevés actifs seulement tant qu'on les demande).
+app.get("/api/hardware", wrap(async (req, res) => res.json(await hardware())));
+// Ouvre une appli de la liste fermée (ex. le Gestionnaire des tâches depuis une fiche).
+app.post("/api/app/:id", (req, res) => {
+  if (!APP_IDS.includes(req.params.id)) return res.status(400).json({ error: "Appli inconnue." });
+  res.json({ ok: true, text: openApp(req.params.id) });
+});
 app.post(
   "/api/pc/:action",
   wrap(async (req, res) => {

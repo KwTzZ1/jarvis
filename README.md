@@ -201,6 +201,8 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 - **Au centre, la sphère** : un réseau de points reliés qui tourne et ondule. Elle passe au **violet mauve** quand Jarvis parle, s'agite quand il écoute ou réfléchit. Clique dessus pour parler.
 - **En discussion**, la sphère se fait petite en haut et la conversation prend la place ; au bout de 2 minutes sans échange, elle reprend sa place au centre avec l'heure.
 - **Sur les autres onglets**, elle se réduit en bas à droite : un clic dessus ramène à l'Assistant.
+- **Autour de la sphère, six points sur l'état du PC** : processeur, carte graphique, mémoire, disque, réseau et système, avec leur valeur en direct. Passe la souris sur un point : une fiche détaillée s'ouvre (modèle, utilisation et sa courbe, fréquence, température, mémoire vidéo, ventilateur, programmes qui prennent le plus de mémoire, place libre, débit…) et la sphère s'illumine de ce côté. Un clic épingle la fiche (avec un raccourci vers le Gestionnaire des tâches), Échap la ferme. Un point passe au rouge si ça chauffe ou sature. Les relevés ne tournent que quand les points sont à l'écran.
+- **Température du processeur** : Windows ne la donne pas. Lance [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (gratuit, en administrateur) et Jarvis l'affiche tout seul. Celle de la carte graphique NVIDIA est lue directement.
 - **Ligne d'infos** sous la barre du haut : météo, prochain rendez-vous, mails non lus, musique en cours. Un clic (ou le bouton ☰ en haut à gauche) ouvre l'**Aperçu** avec tout le détail (agenda, mails, tâches, minuteurs, mémoire, connexions).
 
 ## Onglet Widgets
@@ -285,12 +287,14 @@ lib/youtube.js       recherche YouTube
 lib/images.js        création d'images (Pollinations) et images jointes
 lib/projects.js      onglet Projets
 lib/web.js           Onglet Web : vérifie si un site accepte d'être affiché
+lib/hardware.js      état détaillé du PC (avec lib/hardware.ps1 et nvidia-smi) pour les points autour de la sphère
 public/              interface (HTML, CSS, JS, icônes SVG)
 public/widgets.js    onglet Widgets (pages qui glissent, déplacer, empiler)
 public/web.js        onglet Web (petit navigateur)
 public/player.js     lecteur Spotify intégré (Premium)
 public/projects.js   onglet Projets
 public/palette.js    palette de commandes (Ctrl+K)
+public/hw.js         points du PC autour de la sphère et leurs fiches
 extension/           extension Chrome de Jarvis (affichage de tous les sites dans l'onglet Web)
 launcher/window.mjs  gardien de la fenêtre (charge l'extension)
 public/fonts/        polices Orbitron, Exo 2, Share Tech Mono (licence OFL)

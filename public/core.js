@@ -83,7 +83,7 @@
   };
   const isMini = () => !!document.body.dataset.page && document.body.dataset.page !== "0";
 
-  let energy = 0.2, spin = 0, color = [95, 195, 255], skip = false, frameNo = 0, lastRgb = "", lvl = 0, emitA = 0;
+  let energy = 0.2, spin = 0, color = [95, 195, 255], skip = false, frameNo = 0, lastRgb = "", lvl = 0, emitA = 0, fAmt = 0, fx = 1, fy = 0;
   const tips = [];
   const buf = new Uint8Array(128);
   function voiceLevel() {
@@ -150,6 +150,11 @@
     const e1x = Math.cos(emitA) * 0.958, e1y = Math.sin(emitA) * 0.958, e1z = 0.287;
     const e2x = Math.cos(emitA + 2.7) * 0.98, e2y = Math.sin(emitA + 2.7) * 0.98, e2z = 0.196;
     const rays = lvl > 0.03 ? new Path2D() : null;
+    // Point du PC survolé : la sphère s'illumine et se gonfle doucement de son côté.
+    const fc = window.jarvisCore.focus;
+    if (fc) (fx = fc[0]), (fy = fc[1]);
+    fAmt += ((fc && !mini ? 1 : 0) - fAmt) * 0.1;
+    const focusOn = fAmt > 0.01;
     for (const p of pts) {
       const n = Math.sin(p.x * 2.1 + tt) * Math.sin(p.y * 2.7 - tt * 0.8) * Math.sin(p.z * 1.9 + tt * 1.3) + 0.45 * Math.sin(p.x * 4.6 - tt * 1.6) * Math.sin(p.z * 4.1 + tt * 1.1);
       const d = 1 + amp * n + 0.004 * Math.sin(p.k + t * 11);
@@ -170,6 +175,10 @@
             rays.lineTo(cx + x1 * g * rad, cy + y2 * g * rad);
           }
         }
+      }
+      if (focusOn) {
+        const dd = x1 * fx + y2 * fy;
+        if (dd > 0.45 && z2 > -0.4) g += fAmt * (dd - 0.45) ** 2 * 0.45;
       }
       p.sx = cx + x1 * g * rad;
       p.sy = cy + y2 * g * rad;
@@ -197,7 +206,11 @@
     tips.length = 0;
     for (const p of pts) {
       const depth = Math.max(0, Math.min(1, (p.z2 + 1) / 2));
-      const lum = depth * 0.8 + Math.min(p.deg, 10) * 0.02;
+      let lum = depth * 0.8 + Math.min(p.deg, 10) * 0.02;
+      if (focusOn) {
+        const dd = ((p.sx - cx) * fx + (p.sy - cy) * fy) / rad;
+        if (dd > 0.4) lum += fAmt * (dd - 0.4) * 1.2;
+      }
       bins[lum > 0.75 ? 3 : lum > 0.5 ? 2 : lum > 0.28 ? 1 : 0].push(p.sx, p.sy);
       if (p.g > 1.15) tips.push(p.sx, p.sy);
     }
@@ -275,32 +288,6 @@
     if (!mini) orb.style.transform = `translate(${sr.left - pr.left}px, ${sr.top}px) scale(${sr.width / BASE})`;
     else orb.style.transform = `translate(${innerWidth - MINI - 18}px, ${innerHeight - MINI - 18}px) scale(${MINI / BASE})`;
     orb.title = mini ? "Retour à l'assistant" : "Clique pour parler";
-    drawLinks();
-  }
-
-  // ---------- Jauges du PC autour du noyau, reliées par des traits ----------
-  const stage = document.querySelector(".core-stage");
-  const linksSvg = document.querySelector(".core-links");
-  const gauges = [...document.querySelectorAll(".gauge")];
-  function drawLinks() {
-    if (!stage || !linksSvg || isMini()) return;
-    const st = stage.getBoundingClientRect();
-    const sr = slot.getBoundingClientRect();
-    if (!st.width) return;
-    const ox = sr.left - st.left + sr.width / 2, oy = sr.top - st.top + sr.height / 2;
-    const ringR = sr.width * 0.57;
-    let out = "";
-    for (const g of gauges) {
-      const r = g.querySelector("svg").getBoundingClientRect();
-      if (!r.width) continue;
-      const gx = r.left - st.left + r.width / 2, gy = r.top - st.top + r.height / 2;
-      const side = gx < ox ? 1 : -1;
-      const sx = gx + side * (r.width / 2 + 4), ex = sx + side * 18;
-      const dx = ox - ex, dy = oy - gy, len = Math.hypot(dx, dy) || 1;
-      const tx = ox - (dx / len) * ringR, ty = oy - (dy / len) * ringR;
-      out += `<polyline points="${sx},${gy} ${ex},${gy} ${tx},${ty}"/><circle cx="${tx}" cy="${ty}" r="2"/>`;
-    }
-    linksSvg.innerHTML = out;
   }
 
   new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ["data-page"] });
@@ -308,7 +295,6 @@
   const follow = new ResizeObserver(() => place());
   follow.observe(slot);
   document.querySelectorAll("#pageAssistant .stage > *").forEach((n) => follow.observe(n));
-  if (stage) new ResizeObserver(drawLinks).observe(stage);
   addEventListener("resize", place);
   // Sur téléphone la page défile : la sphère suit sans délai.
   let scrollTimer;
@@ -325,40 +311,6 @@
   place();
   requestAnimationFrame(frame);
   requestAnimationFrame(() => orb.classList.add("ready")); // pas d'animation au tout premier placement
-
-  // ---------- Cadran HUD : anneau des secondes ----------
-  const sec = document.getElementById("hudSec");
-  setInterval(() => {
-    if (document.hidden || !sec) return;
-    sec.style.strokeDasharray = `${new Date().getSeconds() + 1} 60`;
-  }, 1000);
-
-  const fmtH = (s) => (s >= 86400 ? `${Math.floor(s / 86400)}j` : `${Math.floor(s / 3600)}h`);
-  function setGauge(k, pct, text) {
-    const g = gauges.find((x) => x.dataset.k === k);
-    if (!g) return;
-    g.style.setProperty("--v", Math.max(0, Math.min(100, pct || 0)).toFixed(1));
-    g.classList.toggle("hot", pct > 85 && k !== "up");
-    g.querySelector("b").textContent = text;
-  }
-  async function refreshGauges() {
-    if (document.hidden || isMini() || !gauges.length) return;
-    try {
-      const s = await (await fetch("/api/system")).json();
-      setGauge("cpu", s.cpu, s.cpu == null ? "--" : s.cpu + "%");
-      const ram = (100 * s.ram.used) / s.ram.total;
-      setGauge("ram", ram, Math.round(ram) + "%");
-      if (s.disk) {
-        const used = 100 - (100 * s.disk.free) / s.disk.total;
-        setGauge("disk", used, Math.round(used) + "%");
-      }
-      setGauge("up", (100 * (s.uptime % 86400)) / 86400, fmtH(s.uptime));
-    } catch {
-      // Serveur occupé : on réessaiera.
-    }
-  }
-  refreshGauges();
-  setInterval(refreshGauges, 3000);
 
   // ---------- Séquence de démarrage (une fois par lancement) ----------
   const boot = document.getElementById("boot");
