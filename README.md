@@ -9,6 +9,8 @@ Assistant personnel pour Windows, avec une interface façon HUD. Tu lui parles �
 - **Google Tasks** : ta liste de tâches
 - **Spotify** : ce qui joue, pause, suivant, volume, et lancer un titre, un artiste ou une playlist
 - **Météo** : gratuite, sans compte
+- **Discord** : lire tes salons et y écrire, via ton propre bot
+- **Onglet Web** : recherche Google ou Bing et sites directement dans Jarvis
 
 Et aussi :
 
@@ -97,6 +99,32 @@ Dis « joue Daft Punk » : la musique sort directement de Jarvis, sans ouvrir l'
 La fenêtre Jarvis doit rester ouverte (elle peut être réduite) : c'est elle qui joue le son.
 Si tu avais connecté Spotify avec une ancienne version, clique **Déconnecter** puis **Connecter** pour accorder l'autorisation de lecture.
 
+## 4. Discord (bot)
+
+Discord interdit de piloter un compte normal (« self-bot », risque de bannissement). Jarvis passe donc par **ton propre bot**, la méthode officielle : il lit et écrit dans les salons des serveurs où tu l'invites. Les messages privés ne sont pas accessibles.
+
+1. Va sur https://discord.com/developers/applications, clique **New Application** et nomme-la `Jarvis`.
+2. Dans l'onglet **Bot** :
+   - clique **Reset Token** et copie le jeton ;
+   - plus bas, active **Message Content Intent** (sinon le bot voit les messages vides), puis **Save Changes**.
+3. Colle le jeton dans **Réglages > Discord**, puis **Enregistrer**.
+4. Dans Connexions, clique **Inviter** à côté de Discord, choisis ton serveur et valide. Il faut être administrateur du serveur, ou avoir le droit de gérer le serveur.
+
+Ensuite :
+- le **widget Discord** affiche un salon (menu en haut du widget) et permet d'y écrire ;
+- tu peux dire « lis mes derniers messages Discord », ou « envoie sur #général que j'arrive » : un brouillon s'affiche et rien ne part sans ton clic sur **Envoyer**.
+
+Les messages sont postés au nom du bot.
+
+## 5. Onglet Web
+
+Troisième page : barre d'adresse, plusieurs onglets, précédent, suivant, recharger, accueil.
+- Tape une recherche ou une adresse. La recherche passe par Google, ou Bing (au choix dans **Réglages > Recherche**).
+- Beaucoup de grands sites (YouTube en page normale, Reddit, la plupart des journaux…) **refusent d'être affichés dans une autre appli**. Jarvis le détecte et propose « Ouvrir dans une fenêtre ».
+- Les liens YouTube sont convertis en lecteur vidéo, qui, lui, s'affiche.
+- Quand tu dis « ouvre … », le site arrive dans cet onglet.
+- Si Google affiche une page « trafic inhabituel », passe sur Bing dans les réglages.
+
 ---
 
 ## Exemples
@@ -144,8 +172,12 @@ lib/config.js        réglages modifiables depuis l'interface
 lib/google.js        Agenda, Gmail, Tâches
 lib/spotify.js       Spotify
 lib/weather.js       Météo (Open-Meteo)
+lib/discord.js       Discord (bot)
+lib/web.js           Onglet Web : vérifie si un site accepte d'être affiché
 public/              interface (HTML, CSS, JS, icônes SVG)
 public/widgets.js    onglet Widgets (pages qui glissent, déplacer, empiler)
+public/web.js        onglet Web (petit navigateur)
+public/player.js     lecteur Spotify intégré (Premium)
 public/fonts/        polices Orbitron, Exo 2, Share Tech Mono (licence OFL)
 launcher/            lanceur Windows, icône près de l'horloge, installation
 ```

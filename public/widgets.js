@@ -5,20 +5,21 @@
 // ---------- Pages qui glissent ----------
 const pager = $("#pager");
 const track = $("#track");
-let page = Number(localStorage.getItem("page")) === 1 ? 1 : 0;
+let page = [0, 1, 2].includes(Number(localStorage.getItem("page"))) ? Number(localStorage.getItem("page")) : 0;
 
+const PAGE_IDS = ["pageAssistant", "pageWidgets", "pageWeb"];
+const LAST_PAGE = PAGE_IDS.length - 1;
 function goTo(p, animate = true) {
-  page = Math.max(0, Math.min(1, p));
+  page = Math.max(0, Math.min(LAST_PAGE, p));
   track.style.transition = animate ? "" : "none";
-  track.style.transform = `translateX(${-page * 50}%)`;
+  track.style.transform = `translateX(${(-page * 100) / PAGE_IDS.length}%)`;
   document.querySelectorAll(".tab").forEach((t) => {
     const on = Number(t.dataset.page) === page;
     t.classList.toggle("active", on);
     t.setAttribute("aria-selected", String(on));
   });
   // La page cachée ne doit pas prendre le focus clavier.
-  $("#pageAssistant").inert = page !== 0;
-  $("#pageWidgets").inert = page !== 1;
+  PAGE_IDS.forEach((id, i) => ($("#" + id).inert = page !== i));
   localStorage.setItem("page", String(page));
   if (page !== 1) closeAddMenu();
 }
@@ -32,7 +33,7 @@ pager.addEventListener("scroll", () => {
 
 // Balayage au doigt, au stylet ou à la souris (en attrapant le fond de la page).
 let swipe = null;
-const SWIPE_BACKGROUNDS = ".page, .layout, .col, .center, .chat, .board, .board-page, .board-toolbar, .track, .chips";
+const SWIPE_BACKGROUNDS = ".page, .layout, .col, .center, .chat, .board, .board-page, .board-toolbar, .track, .chips, .web-tabs";
 pager.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   if (e.target.closest("input, textarea, select, button, a, label, .add-menu, .msg, .draft")) return;
@@ -58,8 +59,9 @@ window.addEventListener("pointermove", (e) => {
   const width = pager.clientWidth;
   let offset = -page * width + dx;
   // Effet élastique quand on tire au-delà des bords.
+  const min = -LAST_PAGE * width;
   if (offset > 0) offset /= 3;
-  if (offset < -width) offset = -width + (offset + width) / 3;
+  if (offset < min) offset = min + (offset - min) / 3;
   track.style.transform = `translateX(${offset}px)`;
 });
 function endSwipe(e) {
@@ -97,8 +99,8 @@ pager.addEventListener(
 // Clavier : Ctrl + flèche gauche / droite (hors champ de texte).
 document.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.altKey || e.shiftKey || isTyping()) return;
-  if (e.key === "ArrowRight") goTo(1);
-  else if (e.key === "ArrowLeft") goTo(0);
+  if (e.key === "ArrowRight") goTo(page + 1);
+  else if (e.key === "ArrowLeft") goTo(page - 1);
   else return;
   e.preventDefault();
 });
@@ -115,6 +117,7 @@ const WIDGET_TYPES = {
   timers: { title: "Minuteurs", icon: "timer", size: "s", render: renderTimersWidget },
   memory: { title: "Mémoire", icon: "bookmark", size: "s", render: renderMemoryWidget },
   shortcuts: { title: "Raccourcis", icon: "zap", size: "m", render: renderShortcutsWidget },
+  discord: { title: "Discord", icon: "message", size: "t", render: renderDiscordWidget },
 };
 const SIZES = ["s", "m", "t", "l"];
 const SIZE_LABELS = { s: "petit", m: "large", t: "haut", l: "grand" };
@@ -126,6 +129,8 @@ const WIDGET_DEPS = {
   timers: ["timers"],
   reply: ["ask"],
   tick: ["clock"],
+  discord: ["discord"],
+  status: ["discord"],
 };
 for (const [hook, types] of Object.entries(WIDGET_DEPS)) hooks[hook].push(() => renderTypes(types));
 
@@ -226,6 +231,134 @@ function renderAskWidget(body) {
   reply.textContent = last ? last.text : `Pose-moi une question ici, ou dis « ${state.name} ».`;
 }
 
+// ---------- Discord ----------
+const discordState = { channels: null, channelsAt: 0, current: localStorage.getItem("discordChannel") || null, messages: [], error: null, loading: false };
+
+async function loadDiscord(force = false) {
+  const d = state.status?.discord;
+  if (!d?.configured || d.ok === false || discordState.loading) return;
+  discordState.loading = true;
+  try {
+    if (force || !discordState.channels || Date.now() - discordState.channelsAt > 5 * 60_000) {
+      const r = await api("/api/discord/channels");
+      discordState.channels = r.channels;
+      discordState.channelsAt = Date.now();
+      if (!discordState.current || !r.channels.some((c) => c.id === discordState.current)) discordState.current = r.preferred || r.channels[0]?.id || null;
+    }
+    if (discordState.current) {
+      const r = await api(`/api/discord/messages?channel=${encodeURIComponent(discordState.current)}`);
+      discordState.messages = r.messages;
+    }
+    discordState.error = null;
+  } catch (e) {
+    discordState.error = e.message;
+  } finally {
+    discordState.loading = false;
+  }
+  renderTypes(["discord"]);
+}
+hooks.discord.push(() => loadDiscord(true));
+// Rafraîchit les messages toutes les 20 s, seulement si un widget Discord est visible.
+setInterval(() => {
+  if (page === 1 && document.visibilityState === "visible" && document.querySelector('#board .widget-body[data-type="discord"]')) loadDiscord();
+}, 20_000);
+hooks.status.push(() => {
+  const d = state.status?.discord;
+  if (d?.ok && !discordState.channels && !discordState.loading) loadDiscord();
+});
+
+function renderDiscordWidget(body) {
+  const d = state.status?.discord;
+  const note = (text, linkLabel, href) => {
+    const box = el("div", "muted", text);
+    if (href) {
+      const a = el("a", "inline-ic", " " + linkLabel);
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.style.color = "var(--cyan)";
+      box.append(a);
+    }
+    body.replaceChildren(box);
+  };
+  if (!d?.configured) return note("Ajoute le jeton de ton bot Discord dans les réglages (le README explique comment le créer).");
+  if (d.ok === false) return note(d.message);
+  if (discordState.error && !discordState.channels) return note(discordState.error);
+  if (!discordState.channels) return note("Chargement…");
+  if (!discordState.channels.length) return note("Ton bot n'est sur aucun serveur.", "L'inviter", d.invite);
+
+  let select = body.querySelector(".dc-select");
+  if (!select) {
+    select = el("select", "dc-select");
+    select.onchange = () => {
+      discordState.current = select.value;
+      localStorage.setItem("discordChannel", select.value);
+      api("/api/discord/prefs", { method: "POST", body: { channel: select.value } }).catch(() => {});
+      discordState.messages = [];
+      loadDiscord();
+    };
+    const list = el("ul", "list dc-msgs");
+    const form = el("form", "ask-form");
+    const input = el("input");
+    input.placeholder = "Écrire dans le salon…";
+    input.maxLength = 2000;
+    const go = el("button", "mini-icon primary");
+    go.type = "submit";
+    go.title = "Envoyer (en tant que ton bot)";
+    go.append(iconEl("arrow-up", 16));
+    form.append(input, go);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      go.disabled = true;
+      try {
+        await api("/api/discord/send", { method: "POST", body: { channel: discordState.current, content: text } });
+        input.value = "";
+        loadDiscord();
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        go.disabled = false;
+      }
+    });
+    body.replaceChildren(select, list, form);
+    body.classList.add("dc-body");
+  }
+  // Liste des salons (regroupés par serveur).
+  if (select.dataset.count !== String(discordState.channels.length)) {
+    select.replaceChildren();
+    let group = null;
+    let og = null;
+    for (const c of discordState.channels) {
+      if (c.guild !== group) {
+        group = c.guild;
+        og = el("optgroup");
+        og.label = c.guild;
+        select.append(og);
+      }
+      const o = el("option", null, "#" + c.name);
+      o.value = c.id;
+      og.append(o);
+    }
+    select.dataset.count = String(discordState.channels.length);
+  }
+  select.value = discordState.current || "";
+  const list = body.querySelector(".dc-msgs");
+  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 30;
+  list.replaceChildren();
+  if (discordState.error) list.append(emptyLi(discordState.error));
+  else if (!discordState.messages.length) list.append(emptyLi("Aucun message récent."));
+  for (const m of discordState.messages) {
+    const li = el("li");
+    const head = el("div", "when", `${m.author}${m.bot ? " (bot)" : ""} · ${new Date(m.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`);
+    li.append(head, el("div", "dc-text", m.content || "(vide)"));
+    list.append(li);
+  }
+  if (atBottom || !list.dataset.seen) list.scrollTop = list.scrollHeight;
+  list.dataset.seen = "1";
+}
+
 // ---------- Disposition (sauvegardée sur ce PC) ----------
 const uid = () => Math.random().toString(36).slice(2, 10);
 function defaultBoard() {
@@ -238,6 +371,7 @@ function defaultBoard() {
     { stack: ["mails"], size: "t" },
     { stack: ["timers"], size: "s" },
     { stack: ["shortcuts"], size: "m" },
+    { stack: ["discord"], size: "t" },
   ].map((s) => ({ id: uid(), cur: 0, ...s }));
 }
 function loadBoard() {

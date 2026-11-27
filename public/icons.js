@@ -50,6 +50,8 @@ const ICONS = {
   "chevron-left": '<path d="m15 18-6-6 6-6"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 22V12h6v10"/>',
   zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
 };
 

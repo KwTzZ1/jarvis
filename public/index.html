@@ -16,6 +16,7 @@
       <nav class="tabs" role="tablist" aria-label="Pages">
         <button class="tab active" role="tab" data-page="0" aria-selected="true"><i data-icon="message" data-size="15"></i>Assistant</button>
         <button class="tab" role="tab" data-page="1" aria-selected="false"><i data-icon="grid" data-size="15"></i>Widgets</button>
+        <button class="tab" role="tab" data-page="2" aria-selected="false"><i data-icon="globe" data-size="15"></i>Web</button>
       </nav>
     </div>
     <div class="clock"><span id="clockTime">--:--</span><span id="clockDate"></span></div>
@@ -43,6 +44,7 @@
         <div class="conn" id="connFree"><span class="led"></span><span>IA gratuite</span><small id="freeName"></small></div>
         <div class="conn" id="connGoogle"><span class="led"></span><span>Google</span><button class="mini-btn">Connecter</button></div>
         <div class="conn" id="connSpotify"><span class="led"></span><span>Spotify</span><button class="mini-btn">Connecter</button></div>
+        <div class="conn" id="connDiscord"><span class="led"></span><span>Discord</span><button class="mini-btn">Régler</button></div>
       </section>
 
       <section class="panel">
@@ -125,6 +127,20 @@
     </div>
     <div class="board" id="board"></div>
   </section>
+
+  <!-- Page Web : petit navigateur intégré -->
+  <section class="page web-page" id="pageWeb" aria-label="Navigateur">
+    <div class="web-tabs" id="webTabs"></div>
+    <form class="web-bar" id="webBar" autocomplete="off">
+      <button type="button" class="icon-btn" id="webBack" title="Page précédente"><i data-icon="chevron-left"></i></button>
+      <button type="button" class="icon-btn" id="webForward" title="Page suivante"><i data-icon="chevron-right"></i></button>
+      <button type="button" class="icon-btn" id="webReload" title="Recharger"><i data-icon="refresh"></i></button>
+      <button type="button" class="icon-btn" id="webHome" title="Accueil (Google)"><i data-icon="home"></i></button>
+      <input id="webUrl" placeholder="Recherche Google ou adresse d'un site…" spellcheck="false" />
+      <button type="button" class="icon-btn" id="webOut" title="Ouvrir cette page dans une vraie fenêtre"><i data-icon="external"></i></button>
+    </form>
+    <div class="web-view" id="webView"></div>
+  </section>
   </div>
   </div>
 
@@ -163,5 +179,6 @@
   <script src="app.js"></script>
   <script src="player.js"></script>
   <script src="widgets.js"></script>
+  <script src="web.js"></script>
 </body>
 </html>

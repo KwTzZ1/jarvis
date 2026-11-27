@@ -29,7 +29,7 @@ const state = {
 // Dernières données reçues, partagées entre la page principale et les widgets.
 const cache = { dashboard: null, music: null };
 // Petits "abonnements" : les widgets se redessinent quand les données changent.
-const hooks = { data: [], music: [], timers: [], reply: [], tick: [], status: [] };
+const hooks = { data: [], music: [], timers: [], reply: [], tick: [], status: [], discord: [] };
 const emit = (name) => hooks[name].forEach((fn) => {
   try {
     fn();
@@ -149,6 +149,7 @@ function applyStatus(s) {
 
   setConn("#connGoogle", s.google, "google");
   setConn("#connSpotify", s.spotify, "spotify");
+  setDiscordConn(s.discord);
   updateCost(s.usage);
   emit("status");
 
@@ -223,6 +224,19 @@ function setConn(sel, info, service) {
       location.href = `/auth/${service}`;
     }
   };
+}
+
+// Discord : pas de connexion de compte, juste un bot à inviter sur ses serveurs.
+function setDiscordConn(d) {
+  if (!d) return;
+  const row = $("#connDiscord");
+  const btn = row.querySelector("button");
+  row.className = "conn " + (!d.configured || d.ok === false ? "" : d.ok ? "ok" : "warn");
+  row.title = !d.configured ? "Ajoute le jeton de ton bot Discord dans les réglages." : d.ok === false ? d.message : d.bot ? `Bot « ${d.bot} »` : "Vérification…";
+  const canInvite = d.configured && d.ok && d.invite;
+  btn.textContent = canInvite ? "Inviter" : "Régler";
+  btn.title = canInvite ? "Ajouter ton bot à un de tes serveurs Discord" : "Régler Discord";
+  btn.onclick = () => (canInvite ? window.open(d.invite, "_blank", "noopener") : openSettings());
 }
 
 function updateCost(u) {
@@ -519,6 +533,11 @@ function handleAction(a) {
     case "open_url": {
       const url = new URL(a.url);
       if (!["http:", "https:"].includes(url.protocol)) break;
+      // Ouvert dans l'onglet Web de Jarvis (ou proposé dans une fenêtre si le site refuse).
+      if (window.openInJarvis) {
+        window.openInJarvis(url.href);
+        break;
+      }
       const w = window.open(url.href, "_blank", "noopener");
       if (!w) {
         // Fenêtre bloquée par le navigateur : on affiche un lien à la place.
@@ -537,6 +556,9 @@ function handleAction(a) {
     }
     case "email_draft":
       showDraft(a);
+      break;
+    case "discord_draft":
+      showDiscordDraft(a);
       break;
   }
 }
@@ -573,6 +595,38 @@ function showDraft(a) {
     state.history.push({ role: "user", content: "(J'ai annulé ce mail.)" });
     state.history.push({ role: "assistant", content: "Mail annulé." });
   };
+  $("#chat").append(node);
+  scrollChat();
+}
+
+// Message Discord préparé par l'IA : envoyé seulement après clic.
+function showDiscordDraft(a) {
+  const node = el("div", "draft");
+  node.append(withIcon("div", "draft-title", "message", `Message Discord pour ${a.channel}. Vérifie avant d'envoyer.`, 15));
+  const text = el("textarea", "d-body");
+  text.rows = 4;
+  text.value = a.content;
+  const actions = el("div", "draft-actions");
+  const cancel = el("button", "btn ghost", "Annuler");
+  const ok = el("button", "btn", "Envoyer");
+  cancel.type = ok.type = "button";
+  ok.onclick = async () => {
+    ok.disabled = cancel.disabled = true;
+    try {
+      await api(`/api/discord/draft/${a.id}/send`, { method: "POST", body: { content: text.value } });
+      node.replaceChildren(withIcon("div", "draft-title", "check", `Message envoyé sur ${a.channel}`, 15));
+      emit("discord");
+    } catch (e) {
+      toast(e.message, true);
+      ok.disabled = cancel.disabled = false;
+    }
+  };
+  cancel.onclick = async () => {
+    await api(`/api/discord/draft/${a.id}/cancel`, { method: "POST" }).catch(() => {});
+    node.replaceChildren(withIcon("div", "draft-title", "x", "Message Discord annulé.", 15));
+  };
+  actions.append(cancel, ok);
+  node.append(text, actions);
   $("#chat").append(node);
   scrollChat();
 }
@@ -1003,7 +1057,7 @@ $("#settingsForm").addEventListener("submit", async (e) => {
   const errBox = $("#settingsError");
   const values = Object.fromEntries(new FormData(e.target).entries());
   btn.disabled = true;
-  btn.textContent = values.ANTHROPIC_API_KEY || values.GROQ_API_KEY ? "Vérification…" : "Enregistrement…";
+  btn.textContent = values.ANTHROPIC_API_KEY || values.GROQ_API_KEY || values.DISCORD_BOT_TOKEN ? "Vérification…" : "Enregistrement…";
   errBox.hidden = true;
   const showError = (text) => {
     // On garde la fenêtre ouverte pour que l'erreur soit bien vue.
@@ -1017,6 +1071,7 @@ $("#settingsForm").addEventListener("submit", async (e) => {
     const errors = [];
     if (r.ai && !r.ai.ok && r.ai.reason !== "credit") errors.push("Claude : " + r.ai.message);
     if (r.free && !r.free.ok) errors.push("IA gratuite : " + r.free.message);
+    if (r.discord && !r.discord.ok) errors.push("Discord : " + r.discord.message);
     if (errors.length) return showError(errors.join("\n"));
     closeSettings();
     if (r.ai && !r.ai.ok && r.ai.reason === "credit") {
@@ -1031,8 +1086,8 @@ $("#settingsForm").addEventListener("submit", async (e) => {
     }
     const disconnected = r.changed.some((k) => k.startsWith("GOOGLE_") || k.startsWith("SPOTIFY_"));
     toast(
-      r.ai?.ok || r.free?.ok
-        ? `Réglages enregistrés. ${[r.ai?.ok && "Clé Claude valide.", r.free?.ok && "Clé Groq valide."].filter(Boolean).join(" ")}`
+      r.ai?.ok || r.free?.ok || r.discord?.ok
+        ? `Réglages enregistrés. ${[r.ai?.ok && "Clé Claude valide.", r.free?.ok && "Clé Groq valide.", r.discord?.ok && r.discord.message].filter(Boolean).join(" ")}`
         : disconnected
           ? "Réglages enregistrés. Reconnecte le service dont tu as changé les identifiants."
           : "Réglages enregistrés.",

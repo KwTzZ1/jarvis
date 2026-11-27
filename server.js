@@ -3,10 +3,13 @@ import express from "express";
 import * as google from "./lib/google.js";
 import * as spotify from "./lib/spotify.js";
 import { getWeather } from "./lib/weather.js";
+import { pendingDiscord } from "./lib/agent.js";
 import { chat, activeProvider, aiConfigured, aiHealth, checkAi, resetAi, friendlyError, getModel, pendingEmails, getMemory, usageTotals } from "./lib/agent.js";
 import { checkGroq, getGroqModel, groqConfigured, groqHealth, resetGroq } from "./lib/groq.js";
 import { publicSettings, updateSettings } from "./lib/config.js";
 import { save } from "./lib/store.js";
+import * as discord from "./lib/discord.js";
+import { checkPage } from "./lib/web.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_URL = `http://127.0.0.1:${PORT}`;
@@ -50,9 +53,11 @@ function status() {
     aiMessage: aiHealth.message,
     aiReason: aiHealth.reason,
     aiDetail: aiHealth.detail,
+    discord: { configured: discord.discordConfigured(), ok: discord.discordConfigured() ? discord.discordHealth.ok : false, message: discord.discordHealth.message, bot: discord.discordHealth.bot, invite: discord.inviteUrl() },
     free: { configured: groqConfigured(), ok: groqConfigured() ? groqHealth.ok : false, message: groqHealth.message, model: getGroqModel() },
     provider: activeProvider(),
     providerPref: process.env.AI_PROVIDER || "auto",
+    webEngine: process.env.WEB_ENGINE || "google",
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
     spotify: {
       configured: spotify.spotifyConfigured(),
@@ -80,12 +85,15 @@ app.post(
     let free = null;
     if (changed.some((k) => k.startsWith("CLAUDE_") || k === "ANTHROPIC_API_KEY" || k === "ENABLE_WEB_SEARCH")) resetAi();
     if (changed.some((k) => k.startsWith("GROQ_"))) resetGroq();
+    if (changed.some((k) => k.startsWith("DISCORD_"))) discord.resetDiscord();
     // On vérifie une clé dès qu'elle est saisie (même identique : la vérif précédente a pu échouer faute de réseau).
     const checks = [];
     if (changed.includes("ANTHROPIC_API_KEY") || changed.includes("CLAUDE_MODEL") || values.ANTHROPIC_API_KEY) checks.push(checkAi().then((r) => (ai = r)));
     if (changed.includes("GROQ_API_KEY") || changed.includes("GROQ_MODEL") || values.GROQ_API_KEY) checks.push(checkGroq().then((r) => (free = r)));
+    let disc = null;
+    if (changed.includes("DISCORD_BOT_TOKEN") || values.DISCORD_BOT_TOKEN) checks.push(discord.checkDiscord().then((r) => (disc = r)));
     await Promise.all(checks);
-    res.json({ ok: true, changed, ai, free, status: status() });
+    res.json({ ok: true, changed, ai, free, discord: disc, status: status() });
   }),
 );
 app.post("/api/settings/check-ai", wrap(async (req, res) => res.json(await checkAi())));
@@ -243,6 +251,64 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// ---------- Discord (bot) ----------
+const needDiscord = (res) => (discord.discordConfigured() ? false : (res.status(400).json({ error: "Ajoute le jeton de ton bot Discord dans les réglages." }), true));
+app.get(
+  "/api/discord/channels",
+  wrap(async (req, res) => {
+    if (needDiscord(res)) return;
+    res.json({ channels: await discord.listChannels(), preferred: discord.getPreferredChannel() });
+  }),
+);
+app.get(
+  "/api/discord/messages",
+  wrap(async (req, res) => {
+    if (needDiscord(res)) return;
+    const channel = await discord.findChannel(typeof req.query.channel === "string" ? req.query.channel : null);
+    res.json({ channel, messages: await discord.readMessages(channel.id, 20) });
+  }),
+);
+app.post(
+  "/api/discord/prefs",
+  wrap(async (req, res) => {
+    if (typeof req.body?.channel === "string") discord.setPreferredChannel(req.body.channel);
+    res.json({ ok: true });
+  }),
+);
+// Envoi tapé par l'utilisateur lui-même dans le widget.
+app.post(
+  "/api/discord/send",
+  wrap(async (req, res) => {
+    if (needDiscord(res)) return;
+    const channel = await discord.findChannel(String(req.body?.channel || ""));
+    res.json(await discord.sendMessage(channel.id, req.body?.content));
+  }),
+);
+// Message préparé par l'IA : envoyé seulement après le clic "Envoyer".
+app.post(
+  "/api/discord/draft/:id/send",
+  wrap(async (req, res) => {
+    const draft = pendingDiscord.get(req.params.id);
+    if (!draft) return res.status(404).json({ error: "Brouillon introuvable (déjà envoyé, ou Jarvis a redémarré)." });
+    const content = typeof req.body?.content === "string" ? req.body.content : draft.content;
+    await discord.sendMessage(draft.channelId, content);
+    pendingDiscord.delete(req.params.id);
+    res.json({ ok: true });
+  }),
+);
+app.post("/api/discord/draft/:id/cancel", (req, res) => {
+  pendingDiscord.delete(req.params.id);
+  res.json({ ok: true });
+});
+
+// ---------- Onglet Web ----------
+app.get(
+  "/api/web/check",
+  wrap(async (req, res) => {
+    res.json(await checkPage(String(req.query.url || "")));
+  }),
+);
+
 app.use("/api", (req, res) => res.status(404).json({ error: "Route inconnue" }));
 
 // Une erreur imprévue ne doit pas faire tomber l'assistant.
@@ -257,6 +323,7 @@ app
     if (!aiConfigured()) console.log("  [!] Pas de clé API Claude : renseigne-la dans les réglages.");
     else checkAi().then((r) => !r.ok && console.log("  [!] " + r.message));
     if (groqConfigured()) checkGroq().then((r) => !r.ok && console.log("  [!] " + r.message));
+    if (discord.discordConfigured()) discord.checkDiscord().then((r) => !r.ok && console.log("  [!] " + r.message));
     if (!google.googleConfigured()) console.log("  [!] Google non configuré (voir README).");
     if (!spotify.spotifyConfigured()) console.log("  [!] Spotify non configuré (voir README).");
   })
