@@ -26,6 +26,19 @@ const state = {
   noKeyMsg: null,
 };
 
+// Dernières données reçues, partagées entre la page principale et les widgets.
+const cache = { dashboard: null, music: null };
+// Petits "abonnements" : les widgets se redessinent quand les données changent.
+const hooks = { data: [], music: [], timers: [], reply: [], tick: [] };
+const emit = (name) => hooks[name].forEach((fn) => {
+  try {
+    fn();
+  } catch (e) {
+    console.error("widget", name, e);
+  }
+});
+
+
 // ---------- Utilitaires ----------
 async function api(path, options = {}) {
   let res;
@@ -93,6 +106,7 @@ function tick() {
   const now = new Date();
   $("#clockTime").textContent = now.toLocaleTimeString("fr-FR");
   $("#clockDate").textContent = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  emit("tick");
 }
 setInterval(tick, 1000);
 tick();
@@ -104,24 +118,47 @@ function applyStatus(s) {
   state.name = s.name;
   document.title = s.name.toUpperCase();
   $("#brandName").textContent = s.name.toUpperCase();
+  const first = !state.status;
+  const prevProvider = state.status?.provider;
+  state.status = s;
+  state.name = s.name;
+  document.title = s.name.toUpperCase();
+  $("#brandName").textContent = s.name.toUpperCase();
+
+  // Voyants : vert = l'IA a vraiment répondu, orange = pas encore vérifiée, rouge = absente ou bloquée.
+  // La ligne de l'IA "en service" (celle qui répondra à la prochaine question) est mise en avant.
   const model = s.model.replace("claude-", "").replace(/-(\d+)-(\d+)$/, " $1.$2");
-  const blocked = !s.ai || s.aiOk === false;
   $("#modelName").textContent = !s.ai ? "clé manquante" : s.aiOk === false ? (s.aiReason === "credit" ? "sans crédit" : "clé refusée") : model;
-  // Vert : l'IA a vraiment répondu. Orange : pas encore vérifiée. Rouge : clé absente, refusée ou compte sans crédit.
-  $("#connAi").className = "conn " + (blocked ? "" : s.aiOk ? "ok" : "warn");
+  $("#connAi").className = "conn " + (!s.ai || s.aiOk === false ? "" : s.aiOk ? "ok" : "warn") + (s.provider === "claude" ? " active" : "");
   $("#connAi").title = !s.ai
-    ? "Renseigne ta clé dans les réglages."
+    ? "Renseigne ta clé Claude dans les réglages."
     : s.aiOk === false
       ? s.aiMessage + (s.aiDetail ? `\n\nDétail technique : ${s.aiDetail}` : "")
       : s.aiOk
-        ? "Clé API valide, l'IA répond."
+        ? "Clé valide, Claude répond."
         : "Vérification en cours…";
+
+  const f = s.free;
+  $("#freeName").textContent = !f.configured ? "non configurée" : f.ok === false ? "indisponible" : f.model.replace(/^openai\//, "");
+  $("#connFree").className = "conn " + (!f.configured || f.ok === false ? "" : f.ok ? "ok" : "warn") + (s.provider === "groq" ? " active" : "");
+  $("#connFree").title = !f.configured
+    ? "IA gratuite : ajoute une clé Groq dans les réglages (gratuit sur console.groq.com)."
+    : f.ok === false
+      ? f.message
+      : "IA gratuite (Groq) : moins douée que Claude, mais gratuite. Environ 1 000 questions par jour.";
+
   setConn("#connGoogle", s.google, "google");
   setConn("#connSpotify", s.spotify, "spotify");
   updateCost(s.usage);
-  // L'IA était bloquée et ne l'est plus (clé corrigée, crédit ajouté) : on le dit.
-  if (blocked) state.aiBlocked = true;
-  else if (s.aiOk === true && state.aiBlocked) onAiReady();
+
+  // Bloqué = aucune IA ne peut répondre. Dès que ça se débloque, on le dit (une seule fois).
+  const providerOk = s.provider === "claude" ? s.aiOk : s.provider === "groq" ? f.ok : false;
+  if (!s.provider || providerOk === false) state.aiBlocked = true;
+  else if (state.aiBlocked && providerOk === true) onAiReady(s.provider);
+  // L'IA en service a changé en cours de route (crédit épuisé, crédit ajouté…) : on prévient.
+  if (!first && prevProvider && s.provider && prevProvider !== s.provider && !state.aiBlocked) {
+    addMsg("bot", s.provider === "groq" ? "Claude n'est pas disponible : je passe sur l'IA gratuite (Groq) en attendant." : "Je repasse sur Claude.", "info");
+  }
 }
 
 async function loadStatus() {
@@ -143,14 +180,14 @@ async function loadStatus() {
 }
 
 // L'IA vient d'être débloquée : on retire l'avertissement et on le signale (une seule fois).
-function onAiReady() {
+function onAiReady(provider) {
   if (!state.aiBlocked) return;
   state.aiBlocked = false;
   if (state.noKeyMsg) {
     state.noKeyMsg.remove();
     state.noKeyMsg = null;
   }
-  addMsg("bot", "C'est réglé : ma clé fonctionne et ton compte a du crédit. Que puis-je faire pour toi ?");
+  addMsg("bot", provider === "groq" ? "C'est réglé : l'IA gratuite est prête. Que puis-je faire pour toi ?" : "C'est réglé : Claude fonctionne. Que puis-je faire pour toi ?");
   toast("IA opérationnelle.");
 }
 
@@ -190,7 +227,7 @@ function setConn(sel, info, service) {
 function updateCost(u) {
   if (!u) return;
   $("#costValue").textContent = u.cost.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + " $";
-  $("#cost").title = `Coût IA depuis le démarrage : ${u.input} jetons envoyés, ${u.output} reçus, ${u.searches} recherches web`;
+  $("#cost").title = `Coût IA (Claude) depuis le démarrage : ${u.input} jetons envoyés, ${u.output} reçus, ${u.searches} recherches web` + (u.freeRequests ? `\nIA gratuite : ${u.freeRequests} requêtes (0 $)` : "");
 }
 
 // ---------- Widgets ----------
@@ -204,9 +241,9 @@ function renderList(ul, result, renderItem, emptyText) {
   result.data.forEach((item) => ul.append(renderItem(item)));
 }
 
-function renderWeather(w) {
-  const box = $("#weather");
+function renderWeatherInto(box, w) {
   box.replaceChildren();
+  if (!w) return (box.textContent = "Chargement…");
   if (w.error) return (box.textContent = "Météo indisponible : " + w.error);
   const d = w.data;
   const now = el("div", "w-now");
@@ -228,9 +265,9 @@ function renderWeather(w) {
   box.append(now, days);
 }
 
-function renderMemory(mem) {
-  const ul = $("#memory");
+function renderMemoryInto(ul, mem) {
   ul.replaceChildren();
+  if (!mem) return ul.append(emptyLi("Chargement…"));
   if (!mem.length) return ul.append(emptyLi("Rien en mémoire pour l'instant."));
   mem.forEach((m, i) => {
     const li = el("li");
@@ -240,7 +277,10 @@ function renderMemory(mem) {
     x.title = "Oublier";
     x.onclick = async () => {
       try {
-        renderMemory((await api(`/api/memory/${i}?text=${encodeURIComponent(m)}`, { method: "DELETE" })).memory);
+        const r = await api(`/api/memory/${i}?text=${encodeURIComponent(m)}`, { method: "DELETE" });
+        if (cache.dashboard) cache.dashboard.memory = r.memory;
+        renderMemoryInto($("#memory"), r.memory);
+        emit("data");
       } catch (e) {
         toast(e.message, true);
       }
@@ -250,55 +290,78 @@ function renderMemory(mem) {
   });
 }
 
+function eventItem(e) {
+  const li = el("li");
+  li.append(el("div", "when", fmtWhen(e.start, e.allDay)));
+  li.append(el("div", "t", e.title));
+  if (e.location) li.append(withIcon("div", "s", "pin", e.location, 12));
+  return li;
+}
+
+function mailItem(m) {
+  const li = el("li", "clickable");
+  li.append(el("div", "t", senderName(m.from)));
+  li.append(el("div", "s", m.subject));
+  li.title = "Clique pour que je te le résume.\n\n" + m.snippet;
+  li.onclick = () => send(`Résume-moi le mail de ${senderName(m.from)} intitulé "${m.subject}" (id ${m.id}).`);
+  return li;
+}
+
+function taskItem(t) {
+  const li = el("li", "task");
+  const cb = el("input");
+  cb.type = "checkbox";
+  cb.title = "Marquer comme fait";
+  cb.onchange = async () => {
+    cb.disabled = true;
+    li.style.opacity = 0.4;
+    try {
+      await api(`/api/tasks/${encodeURIComponent(t.id)}/complete`, { method: "POST" });
+      setTimeout(refreshAll, 400);
+    } catch (e) {
+      toast(e.message, true);
+      li.style.opacity = 1;
+      cb.checked = false;
+      cb.disabled = false;
+    }
+  };
+  const txt = el("div");
+  txt.append(el("div", "t", t.title));
+  // Google Tasks stocke l'échéance à minuit UTC : on l'affiche donc en UTC pour garder le bon jour.
+  if (t.due) txt.append(el("div", "when", "Pour " + new Date(t.due).toLocaleDateString("fr-FR", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" })));
+  li.append(cb, txt);
+  return li;
+}
+
+const LISTS = {
+  events: [eventItem, "Rien de prévu cette semaine."],
+  emails: [mailItem, "Boîte de réception à jour."],
+  tasks: [taskItem, "Aucune tâche en cours."],
+};
+// kind : "events" | "emails" | "tasks"
+function renderListInto(ul, kind) {
+  const result = cache.dashboard?.[kind];
+  if (!result) {
+    ul.replaceChildren(emptyLi("Chargement…"));
+    return;
+  }
+  renderList(ul, result, ...LISTS[kind]);
+}
+
 let refreshing = false;
 async function refreshAll() {
   if (refreshing) return;
   refreshing = true;
   try {
     const d = await api("/api/dashboard");
+    cache.dashboard = d;
     applyStatus(d.status);
-    renderWeather(d.weather);
-    renderMemory(d.memory);
-    renderList($("#events"), d.events, (e) => {
-      const li = el("li");
-      li.append(el("div", "when", fmtWhen(e.start, e.allDay)));
-      li.append(el("div", "t", e.title));
-      if (e.location) li.append(withIcon("div", "s", "pin", e.location, 12));
-      return li;
-    }, "Rien de prévu cette semaine.");
-    renderList($("#emails"), d.emails, (m) => {
-      const li = el("li", "clickable");
-      li.append(el("div", "t", senderName(m.from)));
-      li.append(el("div", "s", m.subject));
-      li.title = "Clique pour que je te le résume.\n\n" + m.snippet;
-      li.onclick = () => send(`Résume-moi le mail de ${senderName(m.from)} intitulé "${m.subject}" (id ${m.id}).`);
-      return li;
-    }, "Boîte de réception à jour.");
-    renderList($("#tasks"), d.tasks, (t) => {
-      const li = el("li", "task");
-      const cb = el("input");
-      cb.type = "checkbox";
-      cb.title = "Marquer comme fait";
-      cb.onchange = async () => {
-        cb.disabled = true;
-        li.style.opacity = 0.4;
-        try {
-          await api(`/api/tasks/${encodeURIComponent(t.id)}/complete`, { method: "POST" });
-          setTimeout(refreshAll, 400);
-        } catch (e) {
-          toast(e.message, true);
-          li.style.opacity = 1;
-          cb.checked = false;
-          cb.disabled = false;
-        }
-      };
-      const txt = el("div");
-      txt.append(el("div", "t", t.title));
-      // Google Tasks stocke l'échéance à minuit UTC : on l'affiche donc en UTC pour garder le bon jour.
-      if (t.due) txt.append(el("div", "when", "Pour " + new Date(t.due).toLocaleDateString("fr-FR", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" })));
-      li.append(cb, txt);
-      return li;
-    }, "Aucune tâche en cours.");
+    renderWeatherInto($("#weather"), d.weather);
+    renderMemoryInto($("#memory"), d.memory);
+    renderListInto($("#events"), "events");
+    renderListInto($("#emails"), "emails");
+    renderListInto($("#tasks"), "tasks");
+    emit("data");
   } catch (e) {
     console.error(e);
   } finally {
@@ -306,48 +369,53 @@ async function refreshAll() {
   }
 }
 
+function renderMusicInto(box, r) {
+  box.replaceChildren();
+  if (!r) return (box.textContent = "Chargement…");
+  if (r.error === "not_connected") return (box.textContent = "Connecte Spotify pour voir et contrôler ta musique.");
+  if (r.error) return (box.textContent = r.error);
+  const m = r.data;
+  if (!m.title) return (box.textContent = "Rien en lecture. Demande-moi de mettre de la musique.");
+  const np = el("div", "np");
+  if (m.image) {
+    const img = el("img");
+    img.src = m.image;
+    img.alt = "";
+    np.append(img);
+  }
+  const meta = el("div", "meta");
+  meta.append(el("div", "title", m.title), el("div", "artist", m.artist));
+  if (m.device) meta.append(withIcon("div", "artist", "speaker", m.device, 12));
+  np.append(meta);
+  const bar = el("div", "bar");
+  const fill = el("span");
+  fill.style.width = m.durationMs ? `${Math.min(100, (100 * m.progressMs) / m.durationMs)}%` : "0";
+  bar.append(fill);
+  const controls = el("div", "controls");
+  [["previous", "prev", "Précédent"], [m.playing ? "pause" : "play", m.playing ? "pause" : "play", m.playing ? "Pause" : "Lecture"], ["next", "next", "Suivant"]].forEach(([cmd, ic, title]) => {
+    const b = el("button");
+    b.title = title;
+    b.append(iconEl(ic, 16));
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await api(`/api/music/${cmd}`, { method: "POST" });
+        setTimeout(refreshMusic, 500);
+      } catch (e) {
+        toast(e.message, true);
+        b.disabled = false;
+      }
+    };
+    controls.append(b);
+  });
+  box.append(np, bar, controls);
+}
+
 async function refreshMusic() {
-  const box = $("#music");
   try {
-    const r = await api("/api/music");
-    box.replaceChildren();
-    if (r.error === "not_connected") return (box.textContent = "Connecte Spotify pour voir et contrôler ta musique.");
-    if (r.error) return (box.textContent = r.error);
-    const m = r.data;
-    if (!m.title) return (box.textContent = "Rien en lecture. Demande-moi de mettre de la musique.");
-    const np = el("div", "np");
-    if (m.image) {
-      const img = el("img");
-      img.src = m.image;
-      img.alt = "";
-      np.append(img);
-    }
-    const meta = el("div", "meta");
-    meta.append(el("div", "title", m.title), el("div", "artist", m.artist));
-    if (m.device) meta.append(withIcon("div", "artist", "speaker", m.device, 12));
-    np.append(meta);
-    const bar = el("div", "bar");
-    const fill = el("span");
-    fill.style.width = m.durationMs ? `${Math.min(100, (100 * m.progressMs) / m.durationMs)}%` : "0";
-    bar.append(fill);
-    const controls = el("div", "controls");
-    [["previous", "prev", "Précédent"], [m.playing ? "pause" : "play", m.playing ? "pause" : "play", m.playing ? "Pause" : "Lecture"], ["next", "next", "Suivant"]].forEach(([cmd, ic, title]) => {
-      const b = el("button");
-      b.title = title;
-      b.append(iconEl(ic, 16));
-      b.onclick = async () => {
-        b.disabled = true;
-        try {
-          await api(`/api/music/${cmd}`, { method: "POST" });
-          setTimeout(refreshMusic, 500);
-        } catch (e) {
-          toast(e.message, true);
-          b.disabled = false;
-        }
-      };
-      controls.append(b);
-    });
-    box.append(np, bar, controls);
+    cache.music = await api("/api/music");
+    renderMusicInto($("#music"), cache.music);
+    emit("music");
   } catch {
     // Serveur injoignable : loadStatus s'en charge.
   }
@@ -397,9 +465,13 @@ async function ask(text) {
   try {
     const r = await api("/api/chat", { method: "POST", body: { history: state.history } });
     typing.remove();
-    addMsg("bot", r.reply);
+    const bubble = addMsg("bot", r.reply);
+    // Petite étiquette quand c'est l'IA gratuite qui a répondu.
+    if (r.provider === "groq") bubble.dataset.name = state.name.toUpperCase() + " · IA GRATUITE";
     state.history.push({ role: "assistant", content: r.reply });
     state.history = state.history.slice(-30);
+    state.lastReply = { text: r.reply, provider: r.provider };
+    emit("reply");
     updateCost(r.usage);
     for (const a of r.actions || []) {
       try {
@@ -511,8 +583,11 @@ function startTimer(seconds, label) {
   renderTimers();
 }
 function renderTimers() {
-  const ul = $("#timers");
   $("#timersPanel").hidden = timers.length === 0;
+  renderTimersInto($("#timers"));
+  emit("timers");
+}
+function renderTimersInto(ul) {
   ul.replaceChildren();
   timers.forEach((t) => {
     const left = Math.max(0, Math.round((t.end - Date.now()) / 1000));
@@ -919,27 +994,40 @@ $("#settingsForm").addEventListener("submit", async (e) => {
   const errBox = $("#settingsError");
   const values = Object.fromEntries(new FormData(e.target).entries());
   btn.disabled = true;
-  btn.textContent = values.ANTHROPIC_API_KEY ? "Vérification…" : "Enregistrement…";
+  btn.textContent = values.ANTHROPIC_API_KEY || values.GROQ_API_KEY ? "Vérification…" : "Enregistrement…";
   errBox.hidden = true;
+  const showError = (text) => {
+    // On garde la fenêtre ouverte pour que l'erreur soit bien vue.
+    errBox.replaceChildren(iconEl("alert", 16), document.createTextNode(text));
+    errBox.hidden = false;
+  };
   try {
     const r = await api("/api/settings", { method: "POST", body: { values } });
     applyStatus(r.status);
-    if (r.ai && !r.ai.ok && r.ai.reason === "credit") {
-      // La clé est bonne : rien à corriger ici, c'est le compte Anthropic qui manque de crédit.
-      closeSettings();
-      showAiWarning(r.ai.message);
-      toast("Clé enregistrée, mais ton compte Anthropic n'a pas de crédit.", true);
-      return;
-    }
-    if (r.ai && !r.ai.ok) {
-      // On garde la fenêtre ouverte pour que l'erreur soit bien vue.
-      errBox.replaceChildren(iconEl("alert", 16), document.createTextNode(r.ai.message));
-      errBox.hidden = false;
-      return;
-    }
+    // Erreurs à corriger dans cette fenêtre (clé mal copiée, etc.).
+    const errors = [];
+    if (r.ai && !r.ai.ok && r.ai.reason !== "credit") errors.push("Claude : " + r.ai.message);
+    if (r.free && !r.free.ok) errors.push("IA gratuite : " + r.free.message);
+    if (errors.length) return showError(errors.join("\n"));
     closeSettings();
+    if (r.ai && !r.ai.ok && r.ai.reason === "credit") {
+      // La clé est bonne : c'est le compte Anthropic qui manque de crédit.
+      if (r.status.provider === "groq") {
+        toast("Claude n'a pas de crédit : l'IA gratuite répond en attendant.");
+      } else {
+        showAiWarning(r.ai.message);
+        toast("Clé enregistrée, mais ton compte Anthropic n'a pas de crédit.", true);
+      }
+      return;
+    }
     const disconnected = r.changed.some((k) => k.startsWith("GOOGLE_") || k.startsWith("SPOTIFY_"));
-    toast(r.ai?.ok ? "Réglages enregistrés. Clé API Claude valide." : disconnected ? "Réglages enregistrés. Reconnecte le service dont tu as changé les identifiants." : "Réglages enregistrés.");
+    toast(
+      r.ai?.ok || r.free?.ok
+        ? `Réglages enregistrés. ${[r.ai?.ok && "Clé Claude valide.", r.free?.ok && "Clé Groq valide."].filter(Boolean).join(" ")}`
+        : disconnected
+          ? "Réglages enregistrés. Reconnecte le service dont tu as changé les identifiants."
+          : "Réglages enregistrés.",
+    );
     refreshAll();
     refreshMusic();
   } catch (err) {
@@ -987,10 +1075,16 @@ document.addEventListener("visibilitychange", () => {
   const who = state.status.userName ? " " + state.status.userName : "";
   const hello = hour < 6 ? `Encore debout${who} ?` : (hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir") + who + ".";
   addMsg("bot", `${hello} ${state.name} en ligne, tous les systèmes sont opérationnels. Que puis-je faire pour toi ?`);
-  if (!state.status.ai) {
-    state.noKeyMsg = addMsg("bot", "Ma clé API Claude n'est pas encore configurée. Ouvre les réglages en haut à droite pour la renseigner.", "error");
-  } else if (state.status.aiOk === false) {
-    state.noKeyMsg = addMsg("bot", state.status.aiMessage || "Ma clé API Claude est refusée. Vérifie-la dans les réglages.", "error");
+  const s = state.status;
+  if (!s.provider) {
+    showAiWarning("Il me manque une clé d'IA. Ouvre les réglages en haut à droite : colle ta clé Claude, ou une clé Groq gratuite (console.groq.com).");
+  } else if (s.provider === "claude" && s.aiOk === false) {
+    const freeHint = !s.free.configured ? " En attendant, tu peux ajouter une clé Groq gratuite dans les réglages : je l'utiliserai à la place." : "";
+    showAiWarning((s.aiMessage || "Ma clé API Claude est refusée. Vérifie-la dans les réglages.") + freeHint);
+  } else if (s.provider === "groq" && s.free.ok === false) {
+    showAiWarning(s.free.message);
+  } else if (s.provider === "groq" && s.ai && s.aiOk === false) {
+    addMsg("bot", "Claude n'a pas de crédit pour l'instant : je réponds avec l'IA gratuite (Groq) en attendant.", "info");
   }
 
   renderTimers();

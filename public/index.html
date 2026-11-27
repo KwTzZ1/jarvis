@@ -11,7 +11,13 @@
   <div class="grid-bg"></div>
 
   <header class="topbar">
-    <div class="brand"><span class="brand-dot"></span><span id="brandName">JARVIS</span></div>
+    <div class="top-left">
+      <div class="brand"><span class="brand-dot"></span><span id="brandName">JARVIS</span></div>
+      <nav class="tabs" role="tablist" aria-label="Pages">
+        <button class="tab active" role="tab" data-page="0" aria-selected="true"><i data-icon="message" data-size="15"></i>Assistant</button>
+        <button class="tab" role="tab" data-page="1" aria-selected="false"><i data-icon="grid" data-size="15"></i>Widgets</button>
+      </nav>
+    </div>
     <div class="clock"><span id="clockTime">--:--</span><span id="clockDate"></span></div>
     <div class="top-actions">
       <span class="cost" id="cost" title="Coût IA de cette session"><i data-icon="coins" data-size="14"></i><span id="costValue">0,000 $</span></span>
@@ -21,7 +27,9 @@
     </div>
   </header>
 
-  <main class="layout">
+  <div class="pager" id="pager">
+  <div class="track" id="track">
+  <main class="layout page" id="pageAssistant">
     <!-- Colonne gauche -->
     <aside class="col">
       <section class="panel">
@@ -32,6 +40,7 @@
       <section class="panel">
         <h2><span><i data-icon="plug" data-size="14"></i>Connexions</span></h2>
         <div class="conn" id="connAi"><span class="led"></span><span>IA Claude</span><small id="modelName"></small></div>
+        <div class="conn" id="connFree"><span class="led"></span><span>IA gratuite</span><small id="freeName"></small></div>
         <div class="conn" id="connGoogle"><span class="led"></span><span>Google</span><button class="mini-btn">Connecter</button></div>
         <div class="conn" id="connSpotify"><span class="led"></span><span>Spotify</span><button class="mini-btn">Connecter</button></div>
       </section>
@@ -98,6 +107,27 @@
     </aside>
   </main>
 
+  <!-- Page Widgets : on y range ses widgets, on peut les empiler -->
+  <section class="page board-page" id="pageWidgets" aria-label="Widgets">
+    <div class="board-toolbar">
+      <div>
+        <h1 class="board-title">Widgets</h1>
+        <p class="hint" id="boardHint">Glisse vers la droite (ou Ctrl + ←) pour revenir à l'assistant.</p>
+      </div>
+      <div class="board-actions">
+        <button class="btn ghost board-reset" id="boardReset" type="button" hidden><i data-icon="rotate" data-size="15"></i>Disposition par défaut</button>
+        <div class="add-wrap">
+          <button class="btn ghost" id="boardAdd" type="button"><i data-icon="plus" data-size="15"></i>Ajouter</button>
+          <div class="add-menu" id="addMenu" hidden></div>
+        </div>
+        <button class="btn" id="boardEdit" type="button"><i data-icon="edit" data-size="15"></i>Modifier</button>
+      </div>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+  </div>
+  </div>
+
   <!-- Réglages -->
   <div class="modal-bg" id="settings" hidden>
     <form class="modal" id="settingsForm" autocomplete="off" novalidate>
@@ -131,5 +161,6 @@
 
   <script src="icons.js"></script>
   <script src="app.js"></script>
+  <script src="widgets.js"></script>
 </body>
 </html>

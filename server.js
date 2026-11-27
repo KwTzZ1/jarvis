@@ -3,7 +3,8 @@ import express from "express";
 import * as google from "./lib/google.js";
 import * as spotify from "./lib/spotify.js";
 import { getWeather } from "./lib/weather.js";
-import { chat, aiConfigured, aiHealth, checkAi, resetAi, friendlyError, getModel, pendingEmails, getMemory, usageTotals } from "./lib/agent.js";
+import { chat, activeProvider, aiConfigured, aiHealth, checkAi, resetAi, friendlyError, getModel, pendingEmails, getMemory, usageTotals } from "./lib/agent.js";
+import { checkGroq, getGroqModel, groqConfigured, groqHealth, resetGroq } from "./lib/groq.js";
 import { publicSettings, updateSettings } from "./lib/config.js";
 import { save } from "./lib/store.js";
 
@@ -49,6 +50,9 @@ function status() {
     aiMessage: aiHealth.message,
     aiReason: aiHealth.reason,
     aiDetail: aiHealth.detail,
+    free: { configured: groqConfigured(), ok: groqConfigured() ? groqHealth.ok : false, message: groqHealth.message, model: getGroqModel() },
+    provider: activeProvider(),
+    providerPref: process.env.AI_PROVIDER || "auto",
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
     spotify: { configured: spotify.spotifyConfigured(), connected: spotify.spotifyConnected() },
     usage: usageTotals,
@@ -66,11 +70,17 @@ app.post(
     // Nouveaux identifiants = les anciennes connexions ne marchent plus : on repart de zéro.
     if (changed.some((k) => k.startsWith("GOOGLE_"))) google.googleDisconnect();
     if (changed.some((k) => k.startsWith("SPOTIFY_"))) spotify.spotifyDisconnect();
+    const values = req.body?.values || {};
     let ai = null;
+    let free = null;
     if (changed.some((k) => k.startsWith("CLAUDE_") || k === "ANTHROPIC_API_KEY" || k === "ENABLE_WEB_SEARCH")) resetAi();
-    // On vérifie la clé dès qu'elle est saisie (même identique : la vérif précédente a pu échouer faute de réseau).
-    if (changed.includes("ANTHROPIC_API_KEY") || changed.includes("CLAUDE_MODEL") || req.body?.values?.ANTHROPIC_API_KEY) ai = await checkAi();
-    res.json({ ok: true, changed, ai, status: status() });
+    if (changed.some((k) => k.startsWith("GROQ_"))) resetGroq();
+    // On vérifie une clé dès qu'elle est saisie (même identique : la vérif précédente a pu échouer faute de réseau).
+    const checks = [];
+    if (changed.includes("ANTHROPIC_API_KEY") || changed.includes("CLAUDE_MODEL") || values.ANTHROPIC_API_KEY) checks.push(checkAi().then((r) => (ai = r)));
+    if (changed.includes("GROQ_API_KEY") || changed.includes("GROQ_MODEL") || values.GROQ_API_KEY) checks.push(checkGroq().then((r) => (free = r)));
+    await Promise.all(checks);
+    res.json({ ok: true, changed, ai, free, status: status() });
   }),
 );
 app.post("/api/settings/check-ai", wrap(async (req, res) => res.json(await checkAi())));
@@ -227,6 +237,7 @@ app
     console.log(`\n  ${name} est en ligne : ${APP_URL}\n`);
     if (!aiConfigured()) console.log("  [!] Pas de clé API Claude : renseigne-la dans les réglages.");
     else checkAi().then((r) => !r.ok && console.log("  [!] " + r.message));
+    if (groqConfigured()) checkGroq().then((r) => !r.ok && console.log("  [!] " + r.message));
     if (!google.googleConfigured()) console.log("  [!] Google non configuré (voir README).");
     if (!spotify.spotifyConfigured()) console.log("  [!] Spotify non configuré (voir README).");
   })

@@ -3,6 +3,7 @@
 Assistant personnel pour Windows, avec une interface façon HUD. Tu lui parles à la voix ou par écrit, et il gère :
 
 - **IA Claude** : la conversation, la réflexion et la recherche web
+- **IA gratuite (Groq)** : prend le relais si Claude n'a pas de crédit, ou sert seule si tu ne veux rien payer
 - **Google Agenda** : voir et ajouter des événements
 - **Gmail** : lire, résumer et préparer des réponses (rien ne part sans ton clic sur « Envoyer »)
 - **Google Tasks** : ta liste de tâches
@@ -17,6 +18,7 @@ Et aussi :
 - l'**ouverture de sites**
 - le **briefing du matin**
 - un **compteur de coût de l'IA** en direct
+- un **onglet Widgets** : une deuxième page (balaye vers la gauche) où tu ranges, redimensionnes et empiles tes widgets
 
 ---
 
@@ -39,7 +41,12 @@ Toutes les clés se règlent dans l'application, avec le bouton **Réglages** en
 
 ---
 
-## 1. Clé IA (obligatoire)
+## 1. Clé IA
+
+Il faut au moins une des deux clés : Claude (payant, le plus malin) ou Groq (gratuit, plus simple).
+Avec les deux, laisse **Réglages > IA utilisée** sur « Automatique » : Claude répond, et l'IA gratuite prend le relais s'il n'a plus de crédit.
+
+### Claude (payant)
 
 1. Crée un compte sur https://platform.claude.com.
 2. Dans **Billing**, ajoute un peu de crédit (5 $ suffisent pour longtemps).
@@ -47,6 +54,18 @@ Toutes les clés se règlent dans l'application, avec le bouton **Réglages** en
 
 **Coût :** par défaut, Jarvis utilise Claude Haiku 5.5, le modèle le plus économique. Une question coûte en général moins d'un dixième de centime, soit environ 1 € pour 1 000 questions. Une recherche web ajoute environ 1 centime.
 Pour un assistant plus malin, choisis Sonnet 5.5 dans les réglages.
+
+Sans crédit, la clé est reconnue mais l'IA refuse de répondre : le voyant « IA Claude » passe au rouge (« sans crédit »). Dès que tu ajoutes du crédit, Jarvis le détecte tout seul dans la minute.
+
+### IA gratuite : Groq
+
+1. Crée un compte gratuit sur https://console.groq.com.
+2. Dans **API Keys**, clique **Create API Key**, puis colle la clé (elle commence par `gsk_`) dans **Réglages > Clé Groq**.
+
+Modèle par défaut : GPT-OSS 120B. Il est moins doué que Claude, mais il sait utiliser l'agenda, les mails, Spotify, la météo, les minuteurs, etc.
+Limites de l'offre gratuite (indiquées par Groq) : environ 30 requêtes par minute et 1 000 par jour. Une question simple en utilise une, une question qui utilise un outil (météo, agenda…) en utilise deux ou trois. Si tu enchaînes très vite, Jarvis attend quelques secondes tout seul.
+Pas de recherche web avec l'IA gratuite. Les réponses venant de Groq portent l'étiquette « IA GRATUITE ».
+Confidentialité : selon Groq, les requêtes ne sont pas conservées par défaut (sauf jusqu'à 30 jours en cas d'abus ou de panne). Elles passent tout de même par leurs serveurs aux États-Unis, mails compris si tu lui demandes de les lire.
 
 ## 2. Google : Agenda, Gmail, Tâches
 
@@ -88,6 +107,16 @@ Voir ce qui joue marche avec tous les comptes. **Contrôler** la musique demande
 - « Retiens que mon équipe préférée c'est le PSG »
 - « Quelles sont les dernières actus sur la PS5 ? »
 
+## Onglet Widgets
+
+- Passe d'une page à l'autre avec les onglets en haut, en **balayant** (doigt, pavé tactile à deux doigts, ou en attrapant le fond de la page à la souris) ou avec **Ctrl + flèche droite / gauche**.
+- **Ajouter** : horloge, météo, Spotify, agenda, mails, tâches, minuteurs (boutons 5, 10 et 25 min), mémoire, raccourcis, et « Demande à Jarvis » pour lui parler sans changer de page.
+- **Modifier** :
+  - attrape un widget pour le déplacer ;
+  - lâche-le **au centre d'un autre** pour les **empiler** (les flèches du widget passent de l'un à l'autre) ;
+  - icônes en haut à droite : taille (petit, large, haut, grand), défaire la pile, supprimer.
+- La disposition est gardée sur ce PC. « Disposition par défaut » remet tout comme au début.
+
 **Raccourcis :**
 - maintiens **Espace**, ou clique sur le réacteur, pour parler ;
 - l'icône **ondes** active l'écoute permanente ;
@@ -105,12 +134,15 @@ Voir ce qui joue marche avec tous les comptes. **Contrôler** la musique demande
 
 ```
 server.js            serveur local (routes, connexions)
-lib/agent.js         le cerveau IA et ses outils (c'est ici qu'on ajoute des pouvoirs)
+lib/agent.js         le cerveau IA (Claude) et ses outils (c'est ici qu'on ajoute des pouvoirs)
+lib/groq.js          l'IA gratuite (Groq), avec les mêmes outils
 lib/config.js        réglages modifiables depuis l'interface
 lib/google.js        Agenda, Gmail, Tâches
 lib/spotify.js       Spotify
 lib/weather.js       Météo (Open-Meteo)
 public/              interface (HTML, CSS, JS, icônes SVG)
+public/widgets.js    onglet Widgets (pages qui glissent, déplacer, empiler)
+public/fonts/        polices Orbitron, Exo 2, Share Tech Mono (licence OFL)
 launcher/            lanceur Windows, icône près de l'horloge, installation
 ```
 
