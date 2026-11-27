@@ -1,7 +1,9 @@
 import { synthesize, piperVoices } from "./lib/tts.js";
 import { systemInfo, pcControl, PC_ACTIONS, setClipboard, getClipboard, openApp, APP_IDS, appList, appIconPath } from "./lib/system.js";
 import { hardware } from "./lib/hardware.js";
-import { meterStream } from "./lib/meter.js";
+import { meterStream, getVolume, setVolume } from "./lib/meter.js";
+import { listProtocols, saveProtocols } from "./lib/protocols.js";
+import { getNews, NEWS_FEEDS } from "./lib/news.js";
 import { PHONE_PORT, checkToken, phoneInfo, resetPhoneToken, updatePhoneServer } from "./lib/phone.js";
 import "./lib/boot.js";
 import express from "express";
@@ -134,6 +136,25 @@ app.post("/api/hotkey", (req, res) => {
   else listenAt = Date.now();
   res.json({ ok: true });
 });
+// Volume général du PC (curseur, « Jarvis, volume à 30 »).
+app.get("/api/volume", wrap(async (req, res) => res.json(await getVolume())));
+app.post(
+  "/api/volume",
+  wrap(async (req, res) => {
+    const b = req.body || {};
+    res.json(await setVolume({ level: b.level === undefined ? undefined : Number(b.level), muted: typeof b.muted === "boolean" ? b.muted : undefined }));
+  }),
+);
+// Protocoles : routines lancées d'un mot.
+app.get("/api/protocols", (req, res) => res.json({ protocols: listProtocols() }));
+app.put("/api/protocols", wrap(async (req, res) => res.json({ protocols: saveProtocols(req.body?.protocols) })));
+// Actualités (flux RSS publics).
+app.get(
+  "/api/news",
+  wrap(async (req, res) =>
+    res.json({ feeds: Object.entries(NEWS_FEEDS).map(([id, f]) => ({ id, label: f.label, source: f.source })), items: await getNews(String(req.query.cat || "une")) }),
+  ),
+);
 // Niveau du son du PC en direct (la sphère danse sur la musique).
 app.get("/api/audio-level", meterStream);
 // Réglages du micro : autorisation de la fenêtre Jarvis (Chrome / Edge) ou confidentialité de Windows.
@@ -343,6 +364,11 @@ app.post(
       return res.json(await spotify.playFrom(b.playlistId, b.position));
     }
     if (b.liked) return res.json(await spotify.playLiked(true));
+    // Recherche libre (protocoles : « lofi focus », « party hits »…) : la première playlist trouvée.
+    if (typeof b.query === "string" && b.query.trim()) {
+      const type = ["track", "artist", "album", "playlist"].includes(b.type) ? b.type : "playlist";
+      return res.json(await spotify.searchAndPlay(b.query.trim().slice(0, 120), type));
+    }
     if (typeof b.playlist === "string") return res.json(await spotify.playPlaylist(b.playlist, { order: b.order, start: b.start }));
     res.status(400).json({ error: "Rien à lancer." });
   }),

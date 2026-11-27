@@ -165,6 +165,8 @@ const WIDGET_TYPES = {
   notes: { title: "Bloc-notes", icon: "edit", size: "m", render: renderNotesWidget },
   remote: { title: "Télécommande PC", icon: "zap", size: "m", render: renderRemoteWidget },
   apps: { title: "Applis", icon: "grid", size: "l", render: renderAppsWidget },
+  protocols: { title: "Protocoles", icon: "zap", size: "m", render: renderProtocolsWidget },
+  news: { title: "Actualités", icon: "news", size: "t", render: renderNewsWidget },
 };
 const SIZES = ["s", "m", "t", "l"];
 const SIZE_LABELS = { s: "petit", m: "large", t: "haut", l: "grand" };
@@ -179,6 +181,7 @@ const WIDGET_DEPS = {
   discord: ["discord"],
   status: ["discord", "spsearch"],
   images: ["images"],
+  protocols: ["protocols"],
 };
 for (const [hook, types] of Object.entries(WIDGET_DEPS)) hooks[hook].push(() => renderTypes(types));
 
@@ -581,17 +584,146 @@ function renderAppsWidget(body) {
     .catch((e) => box.append(el("p", "empty", e.message)));
 }
 
+// Protocoles : un clic lance la routine, le crayon l'ouvre dans l'éditeur.
+function renderProtocolsWidget(body) {
+  let box = body.querySelector(".protos");
+  if (!box) {
+    box = el("div", "protos");
+    body.append(box);
+  }
+  const P = window.jarvisProtocols;
+  if (!P?.list.length) {
+    P?.load();
+    if (!P) return setTimeout(() => renderProtocolsWidget(body), 300);
+  }
+  const tiles = (P?.list || []).map((p) => {
+    const tile = el("div", "proto-tile");
+    tile.style.setProperty("--pc", p.color || "#5fc3ff");
+    const run = el("button", "proto-run");
+    run.type = "button";
+    run.title = `Lancer « ${p.name} »`;
+    const ic = el("span", "proto-ic");
+    ic.append(iconEl(p.icon || "zap", 18));
+    const txt = el("span", "proto-txt");
+    txt.append(el("b", null, p.name), el("small", null, p.triggers[0] ? `« ${p.triggers[0]} »` : `${p.steps.length} étapes`));
+    run.append(ic, txt);
+    run.onclick = () => P.run(p);
+    const edit = el("button", "proto-edit");
+    edit.type = "button";
+    edit.title = "Modifier";
+    edit.append(iconEl("edit", 13));
+    edit.onclick = () => P.edit(p);
+    tile.append(run, edit);
+    return tile;
+  });
+  const add = el("button", "proto-tile proto-add");
+  add.type = "button";
+  add.append(iconEl("plus", 16), el("span", null, "Nouveau"));
+  add.onclick = () => window.jarvisProtocols?.edit();
+  box.replaceChildren(...tiles, add);
+}
+
+// Actualités : titres du jour (Le Monde, France Info…), par rubrique, ouverts dans l'onglet Web.
+const ago = (ts) => {
+  if (!ts) return "";
+  const m = Math.round((Date.now() - ts) / 60000);
+  return m < 1 ? "à l'instant" : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`;
+};
+function newsItem(it, big) {
+  const b = el("button", "news-item" + (big ? " big" : ""));
+  b.type = "button";
+  b.title = it.title;
+  if (it.image) {
+    const img = el("img");
+    img.src = it.image;
+    img.alt = "";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.onerror = () => img.remove();
+    b.append(img);
+  }
+  const t = el("div", "news-txt");
+  t.append(el("b", null, it.title));
+  if (big && it.summary) t.append(el("p", null, it.summary));
+  t.append(el("small", null, [it.source, ago(it.date)].filter(Boolean).join(" · ")));
+  b.append(t);
+  b.onclick = () => (window.openInJarvis ? window.openInJarvis(it.link) : openExternal(it.link));
+  return b;
+}
+function renderNewsWidget(body) {
+  if (body.querySelector(".news")) return;
+  const box = el("div", "news");
+  const tabs = el("div", "news-tabs");
+  const list = el("div", "news-list");
+  box.append(tabs, list);
+  body.append(box);
+  let cat = localStorage.getItem("newsCat") || "une";
+  const load = async () => {
+    list.classList.add("loading");
+    try {
+      const { feeds, items } = await api(`/api/news?cat=${encodeURIComponent(cat)}`);
+      tabs.replaceChildren(
+        ...feeds.map((f) => {
+          const t = el("button", "news-tab" + (f.id === cat ? " on" : ""), f.label);
+          t.type = "button";
+          t.title = f.source;
+          t.onclick = () => {
+            cat = f.id;
+            localStorage.setItem("newsCat", cat);
+            load();
+          };
+          return t;
+        }),
+      );
+      list.replaceChildren(...items.slice(0, 14).map((it, i) => newsItem(it, i === 0)));
+      list.scrollTop = 0;
+    } catch (e) {
+      list.replaceChildren(el("p", "empty", e.message));
+    }
+    list.classList.remove("loading");
+  };
+  load();
+  const timer = setInterval(() => (body.isConnected ? !document.hidden && load() : clearInterval(timer)), 15 * 60_000);
+}
+
 function renderRemoteWidget(body) {
   if (body.querySelector(".rmt")) return;
   const box = el("div", "rmt");
   const pad = el("div", "rmt-pad");
   const act = (action) => api(`/api/pc/${action}`, { method: "POST" }).catch((e) => toast(e.message, true));
-  for (const [action, icon, title] of [["volume_down", "volume", "Son −"], ["mute", "volume-x", "Couper le son"], ["volume_up", "volume", "Son +"], ["previous", "prev", "Précédent"], ["play_pause", "play", "Lecture / pause"], ["next", "next", "Suivant"]]) {
+  // Vrai volume de Windows : curseur, muet, et suivi en direct (touches du clavier, téléphone…).
+  const vol = el("div", "rmt-vol");
+  const muteB = el("button", "rmt-btn");
+  muteB.type = "button";
+  muteB.title = "Couper / remettre le son";
+  const range = el("input");
+  Object.assign(range, { type: "range", min: 0, max: 100, step: 1, value: 50 });
+  range.setAttribute("aria-label", "Volume du PC");
+  const pct = el("span", "rmt-pct", "…");
+  vol.append(muteB, range, pct);
+  let cur = null;
+  const paint = (v) => {
+    if (!v) return;
+    cur = v;
+    if (document.activeElement !== range) range.value = v.level;
+    pct.textContent = v.muted ? "muet" : `${v.level} %`;
+    muteB.replaceChildren(iconEl(v.muted || !v.level ? "volume-x" : "volume", 18));
+    vol.classList.toggle("muted", v.muted);
+  };
+  let sendT = 0;
+  range.oninput = () => {
+    pct.textContent = `${range.value} %`;
+    clearTimeout(sendT);
+    sendT = setTimeout(() => api("/api/volume", { method: "POST", body: { level: +range.value } }).then(paint, (e) => toast(e.message, true)), 70);
+  };
+  muteB.onclick = () => api("/api/volume", { method: "POST", body: { muted: !cur?.muted } }).then(paint, (e) => toast(e.message, true));
+  addEventListener("jarvis-volume", (e) => body.isConnected && paint(e.detail));
+  api("/api/volume").then(paint, () => (pct.textContent = "—"));
+  for (const [action, icon, title] of [["previous", "prev", "Précédent"], ["play_pause", "play", "Lecture / pause"], ["next", "next", "Suivant"]]) {
     const b = el("button", "rmt-btn");
     b.type = "button";
     b.title = title;
     b.append(iconEl(icon, 18));
-    if (action === "volume_down" || action === "volume_up") b.append(el("b", null, action === "volume_up" ? "+" : "−"));
     b.onclick = () => act(action);
     pad.append(b);
   }
@@ -622,7 +754,7 @@ function renderRemoteWidget(body) {
     }
   }, (e) => toast(e.message, true));
   row.append(copy, open, get);
-  box.append(pad, field, row, lock);
+  box.append(vol, pad, field, row, lock);
   body.replaceChildren(box);
 }
 

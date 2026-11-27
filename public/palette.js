@@ -28,6 +28,7 @@ function paletteActions(query) {
   add(state.voiceOn ? "volume-x" : "volume", state.voiceOn ? "Couper la voix de Jarvis" : "Remettre la voix de Jarvis", () => $("#voiceToggle").click(), "Voix");
   add("plus", "Nouvel onglet web", () => (goTo(2), window.openInJarvis("")), "Web");
 
+  for (const fn of window.paletteExtras || []) fn(add);
   const q = normText(query.trim());
   let list = acts;
   if (q) {

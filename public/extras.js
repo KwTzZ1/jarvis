@@ -30,6 +30,7 @@
   };
   const sfx = (window.sfx = (name) => {
     if (state.status?.uiSounds === false || !SOUNDS[name]) return;
+    if ((name === "notif" || name === "error") && window.jarvisDnd?.active()) return;
     const now = performance.now();
     if (now - (last[name] || 0) < 90) return; // pas de rafale
     last[name] = now;
@@ -77,6 +78,7 @@
       b.onclick = () => {
         select.value = o.value;
         row.querySelectorAll(".theme-sw").forEach((x) => x.classList.toggle("on", x === b));
+        window.__themeOverride = null;
         core.setTheme(o.value);
         sfx("theme");
       };
@@ -85,12 +87,12 @@
     select.style.display = "none";
     return row;
   };
-  hooks.status.push(() => state.status?.theme && core.setTheme(state.status.theme));
+  hooks.status.push(() => state.status?.theme && !window.__themeOverride && core.setTheme(state.status.theme));
   // Réglages fermés sans enregistrer : on revient au thème enregistré.
   const closeSettings0 = closeSettings;
   closeSettings = function () {
     const r = closeSettings0.apply(this, arguments);
-    core.setTheme(state.status?.theme || "jarvis");
+    core.setTheme(window.__themeOverride || state.status?.theme || "jarvis");
     return r;
   };
 

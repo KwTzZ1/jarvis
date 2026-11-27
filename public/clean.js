@@ -48,13 +48,13 @@
 
   // ---------- Coup d'œil ----------
   const glance = document.getElementById("glance");
-  function item(icon, strong, rest, title) {
+  function item(icon, strong, rest, title, onClick) {
     const b = el("button", "gl-item");
     b.type = "button";
     b.title = title || "Ouvrir l'aperçu";
     b.append(iconEl(icon, 14), el("b", null, strong));
     if (rest) b.append(el("span", null, rest));
-    b.onclick = openDrawer;
+    b.onclick = onClick || openDrawer;
     return b;
   }
   function renderGlance() {
@@ -69,8 +69,11 @@
     if (Array.isArray(mails) && mails.length) items.push(item("mail", String(mails.length), mails.length > 1 ? "mails non lus" : "mail non lu"));
     const mu = cache.music?.data;
     if (mu?.title) items.push(item(mu.playing ? "music" : "pause", mu.title, mu.artist, "En cours sur Spotify"));
+    if (window.jarvisDnd?.active()) items.push(item("bell-off", "Ne pas déranger", "", "Clique pour le désactiver", () => (window.jarvisDnd.set(false), toast("Ne pas déranger désactivé."))));
     glance.replaceChildren(...items);
   }
+  window.renderGlance = renderGlance;
+  setInterval(renderGlance, 60_000); // « ne pas déranger » automatique à 23 h et 8 h
   hooks.data.push(renderGlance);
   hooks.music.push(renderGlance);
   renderGlance();

@@ -29,7 +29,7 @@ const state = {
 // Dernières données reçues, partagées entre la page principale et les widgets.
 const cache = { dashboard: null, music: null };
 // Petits "abonnements" : les widgets se redessinent quand les données changent.
-const hooks = { data: [], music: [], timers: [], reply: [], tick: [], status: [], discord: [], images: [] };
+const hooks = { data: [], music: [], timers: [], reply: [], tick: [], status: [], discord: [], images: [], protocols: [] };
 const emit = (name) => hooks[name].forEach((fn) => {
   try {
     fn();
@@ -291,7 +291,25 @@ function renderWeatherInto(box, w) {
     c.title = `${day.description}${day.rain != null ? `, ${day.rain} % de risque de pluie` : ""}`;
     days.append(c);
   });
-  box.append(now, days);
+  // Les prochaines heures (toutes les 3 h), avec une petite courbe des températures.
+  const hs = (d.hourly || []).slice(0, 8);
+  const hours = el("div", "w-hours");
+  if (hs.length > 1) {
+    const lo = Math.min(...hs.map((h) => h.temp)), hi = Math.max(...hs.map((h) => h.temp));
+    const pts = hs.map((h, i) => `${(((i + 0.5) / hs.length) * 100).toFixed(1)},${(19 - ((h.temp - lo) / Math.max(1, hi - lo)) * 15).toFixed(1)}`).join(" ");
+    hours.innerHTML = `<svg class="w-curve" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`;
+    for (const h of hs) {
+      const c = el("div", "w-hour");
+      c.append(el("small", null, h.time.replace(/^0/, "").replace(":00", " h")), iconEl(h.icon, 18), el("b", null, `${h.temp}°`));
+      if (h.rain >= 40) c.append(el("i", null, `${h.rain} %`));
+      if (h.rain) c.title = `${h.rain} % de risque de pluie`;
+      hours.append(c);
+    }
+  }
+  box.append(now);
+  if (hs.length > 1) box.append(hours);
+  box.append(days);
+  if (d.sun?.rise) box.append(withIcon("div", "w-desc w-sun inline-ic", "sunrise", `Lever ${d.sun.rise.replace(/^0/, "").replace(":", " h ")} · coucher ${d.sun.set.replace(/^0/, "").replace(":", " h ")}`, 12));
 }
 
 function renderMemoryInto(ul, mem) {
@@ -700,6 +718,8 @@ dropZone.addEventListener("drop", (e) => {
 // Retourne false si la demande n'a pas pu partir (Jarvis déjà occupé).
 function send(text) {
   text = (text || "").trim();
+  // Commandes instantanées (protocoles, volume, veille…) : traitées tout de suite, sans IA.
+  if (text && !state.attachments.length && window.localCommand?.(text)) return true;
   if (!text && !state.attachments.length) return true;
   if (state.busy) {
     toast("Patiente une seconde, je termine ma réponse.");
@@ -820,6 +840,9 @@ function handleAction(a) {
     case "image":
       showGeneratedImage(a);
       emit("images");
+      break;
+    case "protocol":
+      window.jarvisProtocols?.run(a.id, { fromAi: true });
       break;
     case "youtube":
       // La recherche est gardée dans l'adresse : les autres résultats s'affichent sous la vidéo.
@@ -1692,6 +1715,7 @@ async function openSettings(focusSection) {
   }
   content.append(voiceSection(nav));
   if (window.micSection) content.append(micSection(nav));
+  if (window.annonceSection) content.append(annonceSection(nav));
   phoneQr(content);
   $("#settings").hidden = false;
   const target = focusSection && [...content.querySelectorAll(".set-section")].find((x) => x.id.includes(focusSection));

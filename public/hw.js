@@ -139,6 +139,7 @@
   function update(d) {
     data = d;
     lastAt = Date.now();
+    dispatchEvent(new CustomEvent("jarvis-hw", { detail: d }));
     const ramP = (100 * d.ram.used) / d.ram.total;
     const c = d.disk.drives.find((x) => /^C:/i.test(x.id)) || d.disk.drives[0];
     const diskP = c ? 100 - (100 * c.free) / c.total : null;

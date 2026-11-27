@@ -209,6 +209,32 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 - **Température du processeur** : Windows ne la donne pas. Lance [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (gratuit, en administrateur) et Jarvis l'affiche tout seul. Celle de la carte graphique NVIDIA est lue directement.
 - **Ligne d'infos** sous la barre du haut : météo, prochain rendez-vous, mails non lus, musique en cours. Un clic (ou le bouton ☰ en haut à gauche) ouvre l'**Aperçu** avec tout le détail (agenda, mails, tâches, minuteurs, mémoire, connexions).
 
+## Protocoles, veille et annonces
+
+**Protocoles** : des routines lancées d'un mot. Dis « Jarvis, mode jeu » (ou tape-le) : un bandeau « PROTOCOLE » s'affiche et chaque étape s'allume quand elle est faite. Fournis au départ :
+- **Mode jeu** (« mode jeu », « on joue ») : thème Mark, Discord et Steam ouverts, volume à 60 %.
+- **Mode travail** (« mode travail », « concentration ») : thème Jarvis, ne pas déranger, musique lofi, volume à 35 %, minuteur de 25 min.
+- **Bonne nuit** (« bonne nuit », « je vais dormir ») : musique en pause, volume à 20 %, ne pas déranger, puis mode veille.
+- **Protocole fête** (« c'est la fête ») : sphère arc-en-ciel qui danse, confettis, musique de fête, volume à 75 %.
+
+Tu les modifies (ou en crées d'autres) dans le widget **Protocoles** (crayon sur une tuile, ou « Nouveau ») ou avec Ctrl+K → « Créer un protocole ». Étapes possibles : dire une phrase, ouvrir une appli, lancer de la musique (une recherche Spotify), lecture/pause, volume, thème, minuteur, ne pas déranger, mode veille, effet fête, ouvrir un site, verrouiller le PC, attendre. « Essayer » le lance sans l'enregistrer. L'IA connaît aussi tes protocoles (« prépare-moi pour jouer »).
+
+**Commandes instantanées** (sans IA : rien à payer, réponse immédiate) : un protocole, « volume à 30 », « monte le son », « baisse le son de 20 », « coupe le son », « remets le son », « mode veille », « ne pas déranger », « aide ».
+
+**Mode veille** : l'écran passe en ambiance, avec la sphère en grand, l'heure géante, la météo, le prochain rendez-vous, la musique en cours (pochette et progression) et l'état du PC. Il s'active tout seul après 10 minutes sans toucher à Jarvis (réglable), avec le bouton lune en haut ou en disant « mode veille ». Le contenu bouge légèrement chaque minute et s'atténue au bout de 10 minutes (pour ne pas marquer l'écran). Bouge la souris ou appuie sur une touche pour revenir ; tu peux aussi parler à Jarvis sans sortir de la veille : sa réponse s'affiche en sous-titre.
+
+**Annonces** (Réglages → Veille et annonces) : Jarvis prévient de lui-même, à voix haute :
+- un rendez-vous qui approche (10 minutes avant, réglable) ;
+- un nouveau mail (« Nouveau mail de Paul : … ») ;
+- le PC qui chauffe (carte graphique au-delà de 85 °C) ;
+- et le **briefing du matin**, à la première ouverture de la journée : météo, rendez-vous du jour, mails non lus, tâches. Ctrl+K → « Briefing parlé maintenant » pour l'entendre à tout moment.
+
+**Ne pas déranger** : plus d'annonces parlées ni de bips automatiques (les messages restent affichés). Automatique la nuit, de 23 h à 8 h, ou à la demande (« ne pas déranger », Ctrl+K, protocole). Une pastille l'indique sous la barre du haut ; un clic dessus le désactive.
+
+**Volume du PC** : le vrai volume de Windows, avec un curseur dans le widget Télécommande (il suit en direct les touches du clavier), à la voix (« volume à 30 ») et dans Ctrl+K. Marche aussi depuis le téléphone.
+
+**Aide** : appuie sur **?** (hors zone de texte) pour voir tous les raccourcis et les phrases utiles.
+
 ## Onglet Widgets
 
 - Passe d'une page à l'autre avec les onglets en haut, en **balayant** (doigt, pavé tactile à deux doigts, ou en attrapant le fond de la page à la souris) ou avec **Ctrl + flèche droite / gauche**.
@@ -227,6 +253,8 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
   - **Spotify (recherche)** : cherche un titre, ▶ pour l'écouter, + pour l'ajouter à une de tes playlists ou en créer une nouvelle (la première fois : Réglages → Spotify → Déconnecter puis Connecter, pour donner l'autorisation de modifier tes playlists) ;
   - **Système** : processeur, mémoire et disque en direct (barre rouge au-delà de 85 %) ;
   - **Bloc-notes** : tes notes, enregistrées automatiquement sur ce PC ;
+  - **Protocoles** : tes routines en un clic (crayon pour les modifier, « Nouveau » pour en créer) ;
+  - **Actualités** : les titres du jour avec images (À la une, En continu, Tech, Jeux vidéo, Sport, Sciences), ouverts dans l'onglet Web. L'IA peut aussi les résumer (« quoi de neuf dans l'actu ? ») ;
   - **Applis** : tes applis (Discord, Steam, Spotify, Epic, Réglages, Calculette, Fichiers, Tâches…) avec leurs vraies icônes ; un clic les ouvre sur le PC, même depuis le téléphone. Seules celles qui sont installées s'affichent ;
   - Discord : messages du salon mis à jour toutes les 5 secondes, avec avatars ; les nouveaux s'allument ;
   - Mails : expéditeur, heure, objet et début du message ;
@@ -272,7 +300,7 @@ Jarvis consomme peu quand il ne sert pas :
 
 ## Télécommande du PC
 
-- Widget **Télécommande PC** (idéal depuis le téléphone) : son −/muet/+, précédent/lecture/suivant (marche avec YouTube, Netflix, Spotify…), verrouiller le PC.
+- Widget **Télécommande PC** (idéal depuis le téléphone) : curseur du vrai volume de Windows et bouton muet, précédent/lecture/suivant (marche avec YouTube, Netflix, Spotify…), verrouiller le PC.
 - **Envoyer au PC** : colle un texte ou un lien, puis « Copier sur le PC » (presse-papiers) ou « Ouvrir sur le PC ». « Récupérer » rapatrie ce qui est copié sur le PC.
 - À la voix ou par écrit : « baisse le son », « mets pause », « verrouille le PC », « copie ce lien sur le PC : … », « qu'est-ce que j'ai copié ? ».
 
@@ -297,6 +325,9 @@ lib/youtube.js       recherche YouTube
 lib/images.js        création d'images (Pollinations) et images jointes
 lib/projects.js      onglet Projets
 lib/web.js           Onglet Web : vérifie si un site accepte d'être affiché
+lib/protocols.js     protocoles (routines) gardés dans data/protocols.json
+lib/news.js          actualités (flux RSS publics)
+lib/meter.js         son du PC : niveau en direct (sphère qui danse) et volume de Windows (avec lib/meter.ps1)
 lib/hardware.js      état détaillé du PC (avec lib/hardware.ps1 et nvidia-smi) pour les points autour de la sphère
 public/              interface (HTML, CSS, JS, icônes SVG)
 public/widgets.js    onglet Widgets (pages qui glissent, déplacer, empiler)
@@ -305,6 +336,9 @@ public/player.js     lecteur Spotify intégré (Premium)
 public/projects.js   onglet Projets
 public/palette.js    palette de commandes (Ctrl+K)
 public/hw.js         points du PC autour de la sphère et leurs fiches
+public/extras.js     sons, thèmes, anneaux minuteur/musique, raccourci global, réglages du micro
+public/protocols.js  protocoles, commandes instantanées, éditeur, effet fête
+public/ambient.js    mode veille, ne pas déranger, annonces, briefing du matin, aide (touche ?)
 extension/           extension Chrome de Jarvis (affichage de tous les sites dans l'onglet Web)
 launcher/window.mjs  gardien de la fenêtre (charge l'extension)
 public/fonts/        polices Orbitron, Exo 2, Share Tech Mono (licence OFL)

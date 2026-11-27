@@ -97,15 +97,23 @@
     if (c.contains("offline")) return "offline";
     if (typeof state !== "undefined" && state.speaking) return "speaking"; // suit la voix, quoi qu'affiche l'écran
     const base = c.contains("listening") ? "listening" : c.contains("thinking") ? "thinking" : c.contains("speaking") ? "speaking" : "idle";
-    return base === "idle" && performance.now() < musicUntil ? "music" : base;
+    return base === "idle" && (performance.now() < musicUntil || performance.now() < partyUntil) ? "music" : base;
   };
-  const isMini = () => !!document.body.dataset.page && document.body.dataset.page !== "0";
+  const isMini = () => !document.body.classList.contains("ambient") && !!document.body.dataset.page && document.body.dataset.page !== "0";
 
   let energy = 0.2, spin = 0, color = [...COLORS.idle], skip = false, frameNo = 0, lastRgb = "", lvl = 0, emitA = 0, fAmt = 0, fx = 1, fy = 0;
   const tips = [];
 
   // Musique : niveau du son qui sort du PC (vumètre de Windows, rien n'est enregistré). La sphère danse dessus.
-  let meter = 0, meterAt = -1e9, meterES = null, peakRef = 0.06, musAvg = 0, musicUntil = 0, mn = 0, beat = 0;
+  let meter = 0, meterAt = -1e9, meterES = null, peakRef = 0.06, musAvg = 0, musicUntil = 0, mn = 0, beat = 0, partyUntil = 0;
+  window.jarvisCore.party = (seconds) => (partyUntil = performance.now() + seconds * 1000);
+  // Couleur de l'arc-en-ciel (teinte en degrés), un peu éclaircie.
+  const rainbow = (h) =>
+    [0, 8, 4].map((n) => {
+      const k = (n + (((h % 360) + 360) % 360) / 30) % 12;
+      const v = 0.5 - 0.5 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(255 * (v + (1 - v) * 0.22));
+    });
   window.jarvisCore.feedMeter = (v) => ((meter = v), (meterAt = performance.now()));
   const onPc = ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname);
   function meterSync() {
@@ -113,6 +121,8 @@
     if (want && !meterES) {
       meterES = new EventSource("/api/audio-level");
       meterES.onmessage = (e) => window.jarvisCore.feedMeter(+e.data || 0);
+      // Volume de Windows changé (clavier, curseur, téléphone…) : les curseurs suivent.
+      meterES.addEventListener("volume", (e) => dispatchEvent(new CustomEvent("jarvis-volume", { detail: JSON.parse(e.data) })));
     } else if (!want && meterES) {
       meterES.close();
       meterES = null;
@@ -151,6 +161,13 @@
     musAvg += (mn - musAvg) * 0.06;
     beat = Math.max(0, mn - musAvg * 1.08) * 2.4;
     if (mn > 0.12) musicUntil = now + 1500;
+    // Protocole fête : la sphère danse même sans musique, en couleurs.
+    const party = now < partyUntil;
+    if (party && mn < 0.25) {
+      const ph = (t * 2.1) % 1;
+      mn = 0.55 + 0.45 * Math.exp(-ph * 5);
+      beat = 0.9 * Math.exp(-ph * 7);
+    }
     const level = voiceLevel();
     // Volume de la voix, lissé : monte vite, redescend doucement. Sans analyse du son : rythme de parole simulé.
     const raw = m === "speaking" ? level ?? Math.max(0, Math.sin(t * 9.1) * Math.sin(t * 3.7 + 1)) ** 0.7 * (0.65 + 0.35 * Math.sin(t * 1.3)) : m === "music" ? Math.min(1, beat * 1.3 + mn * 0.2) : 0;
@@ -165,12 +182,13 @@
     }[m];
     energy += (target - energy) * (m === "music" ? 0.3 : 0.1);
     spin += { idle: 0.003, listening: 0.006, thinking: 0.022, speaking: 0.008, music: 0.005 + mn * 0.012, offline: 0.0008 }[m];
-    const want = COLORS[m === "music" ? "idle" : m];
-    color = color.map((c, i) => c + (want[i] - c) * 0.07);
+    const want = party ? rainbow(t * 70) : COLORS[m === "music" ? "idle" : m];
+    color = color.map((c, i) => c + (want[i] - c) * (party ? 0.2 : 0.07));
     const uiRgb = color.map(Math.round).join(",");
     // Sur la musique, la sphère s'éclaire à chaque coup (l'interface, elle, garde sa couleur : moins de calcul).
     const tint = m === "music" ? Math.min(0.55, mn * 0.3 + beat * 0.45) : 0;
-    const [cr, cg, cb] = color.map((c, i) => Math.round(c + (COLORS.speaking[i] - c) * tint));
+    const tintTo = party ? rainbow(t * 70 + 150) : COLORS.speaking;
+    const [cr, cg, cb] = color.map((c, i) => Math.round(c + (tintTo[i] - c) * tint));
     const rgb = `${cr},${cg},${cb}`;
     // Toute l'interface suit la couleur de la sphère (bleu, mauve quand il parle) ; mise à jour seulement si elle change.
     if (uiRgb !== lastRgb && frameNo++ % 4 === 0) document.documentElement.style.setProperty("--core-rgb", (lastRgb = uiRgb));
@@ -337,15 +355,18 @@
   const BASE = 440;
   orb.style.width = orb.style.height = BASE + "px";
   function place() {
-    const sr = slot.getBoundingClientRect();
+    // Mode veille : la sphère part en grand dans son emplacement, au centre de l'écran.
+    const amb = document.body.classList.contains("ambient") ? document.querySelector(".amb-orb") : null;
+    const sr = (amb || slot).getBoundingClientRect();
     const pr = page0.getBoundingClientRect();
     const mini = isMini();
     document.body.classList.toggle("orb-mini", mini);
-    if (!mini) orb.style.transform = `translate(${sr.left - pr.left}px, ${sr.top}px) scale(${sr.width / BASE})`;
+    if (!mini) orb.style.transform = `translate(${sr.left - (amb ? 0 : pr.left)}px, ${sr.top}px) scale(${sr.width / BASE})`;
     else orb.style.transform = `translate(${innerWidth - MINI - 18}px, ${innerHeight - MINI - 18}px) scale(${MINI / BASE})`;
     orb.title = mini ? "Retour à l'assistant" : "Clique pour parler";
   }
 
+  window.jarvisCore.place = place;
   new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ["data-page"] });
   // La sphère suit sa place quand le contenu autour change (réponse affichée, ligne d'infos…).
   const follow = new ResizeObserver(() => place());
