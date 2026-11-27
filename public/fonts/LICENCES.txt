@@ -288,3 +288,5 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 
 Rajdhani (Indian Type Foundry) : SIL Open Font License 1.1, fichiers issus de Fontsource.
+
+Space Grotesk (Florian Karsten) : SIL Open Font License 1.1, fichiers issus de Fontsource.

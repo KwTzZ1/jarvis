@@ -74,7 +74,7 @@ pager.addEventListener("scroll", () => {
 
 // Balayage au doigt, au stylet ou à la souris (en attrapant le fond de la page).
 let swipe = null;
-const SWIPE_BACKGROUNDS = ".page, .layout, .col, .center, .chat, .board, .board-page, .board-toolbar, .track, .chips, .web-tabs, .projects-page, .projects";
+const SWIPE_BACKGROUNDS = ".page, .stage, .core-stage, .glance, .core-clock, .layout, .col, .center, .chat, .board, .board-page, .board-toolbar, .track, .chips, .web-tabs, .projects-page, .projects";
 pager.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   if (e.target.closest("input, textarea, select, button, a, label, .add-menu, .msg, .draft, .widget-head, .rs-handle")) return;

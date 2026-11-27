@@ -10,30 +10,49 @@
   const ctx = canvas.getContext("2d");
   window.jarvisCore = window.jarvisCore || { analyser: null };
 
-  // ---------- Points de la sphère (spirale de Fibonacci, légèrement en désordre) ----------
-  const N = 760;
+  // ---------- Sphère « plexus » : points semés au hasard (avec des amas), reliés à leurs voisins ----------
+  const rnd = () => {
+    const u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = Math.sqrt(1 - u * u);
+    return [Math.cos(a) * r, u, Math.sin(a) * r];
+  };
+  const N = 700;
   const pts = [];
-  const golden = Math.PI * (3 - Math.sqrt(5));
+  const seeds = Array.from({ length: 10 }, rnd);
   for (let i = 0; i < N; i++) {
-    const y = 1 - (i / (N - 1)) * 2;
-    const r = Math.sqrt(1 - y * y);
-    const a = golden * i;
-    const j = 0.96 + Math.random() * 0.08;
-    pts.push({ x: Math.cos(a) * r * j, y: y * j, z: Math.sin(a) * r * j, k: Math.random() * 6.283, sx: 0, sy: 0, z2: 0 });
-  }
-  // Maillage : chaque point est relié à ses deux plus proches voisins (calculé une seule fois).
-  const links = [];
-  for (let i = 0; i < N; i++) {
-    const p = pts[i];
-    let b1 = -1, b2 = -1, d1 = 9, d2 = 9;
-    for (let j = 0; j < N; j++) {
-      if (j === i) continue;
-      const q = pts[j];
-      const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2;
-      if (d < d1) (d2 = d1), (b2 = b1), (d1 = d), (b1 = j);
-      else if (d < d2) (d2 = d), (b2 = j);
+    let [x, y, z] = rnd();
+    if (Math.random() < 0.45) {
+      // Amas : le point se rapproche d'un centre (zones denses, comme un vrai réseau).
+      const c = seeds[(Math.random() * seeds.length) | 0];
+      x = c[0] + x * 0.38;
+      y = c[1] + y * 0.38;
+      z = c[2] + z * 0.38;
+      const l = Math.hypot(x, y, z) || 1;
+      (x /= l), (y /= l), (z /= l);
     }
-    links.push(i, b1, i, b2);
+    const r = 1 - Math.random() ** 2.5 * 0.16; // presque tous en surface, quelques-uns à l'intérieur
+    pts.push({ x: x * r, y: y * r, z: z * r, k: Math.random() * 6.283, sx: 0, sy: 0, z2: 0, deg: 0 });
+  }
+  // Liaisons : chaque point vers ses voisins proches (6 au plus), plus quelques longues lignes.
+  const links = [];
+  const near = pts.map(() => []);
+  for (let i = 0; i < N; i++)
+    for (let j = i + 1; j < N; j++) {
+      const p = pts[i], q = pts[j];
+      const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2;
+      if (d < 0.058) near[i].push([d, j]);
+    }
+  near.forEach((list, i) => {
+    list.sort((a, b) => a[0] - b[0]);
+    for (const [, j] of list.slice(0, 6)) {
+      links.push(i, j);
+      pts[i].deg++;
+      pts[j].deg++;
+    }
+  });
+  for (let n = 0; n < 40; n++) {
+    const i = (Math.random() * N) | 0, j = (Math.random() * N) | 0;
+    const p = pts[i], q = pts[j];
+    if (i !== j && (p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2 < 0.45) links.push(i, j);
   }
   // Étincelles qui s'échappent de la sphère.
   const DUST = 160;
@@ -55,7 +74,7 @@
   new ResizeObserver(resize).observe(canvas);
 
   // Bleu au repos, cyan à l'écoute, bleu profond en réflexion, VIOLET MAUVE quand il parle.
-  const COLORS = { idle: [46, 160, 255], listening: [80, 220, 255], thinking: [90, 140, 255], speaking: [178, 100, 255], offline: [110, 125, 140] };
+  const COLORS = { idle: [95, 195, 255], listening: [120, 232, 255], thinking: [105, 150, 255], speaking: [182, 104, 255], offline: [110, 125, 140] };
   const mode = () => {
     const c = reactor.classList;
     if (c.contains("offline")) return "offline";
@@ -64,7 +83,7 @@
   };
   const isMini = () => !!document.body.dataset.page && document.body.dataset.page !== "0";
 
-  let energy = 0.2, spin = 0, color = [46, 160, 255], skip = false, frameNo = 0;
+  let energy = 0.2, spin = 0, color = [95, 195, 255], skip = false, frameNo = 0, lastRgb = "";
   const buf = new Uint8Array(128);
   function voiceLevel() {
     const an = window.jarvisCore.analyser;
@@ -76,8 +95,8 @@
   }
 
   const bins = [[], [], [], []];
-  const ALPHA = [0.16, 0.36, 0.62, 0.95];
-  const SIZE = [0.9, 1.2, 1.5, 1.9];
+  const ALPHA = [0.22, 0.42, 0.72, 1];
+  const SIZE = [0.8, 1.1, 1.5, 2.1];
 
   function frame(now) {
     if (canvas.clientWidth !== W || canvas.clientHeight !== H) resize(); // filet si l'observateur n'a rien vu
@@ -100,73 +119,61 @@
     color = color.map((c, i) => c + (want[i] - c) * 0.07);
     const [cr, cg, cb] = color.map(Math.round);
     const rgb = `${cr},${cg},${cb}`;
-    if (frameNo++ % 5 === 0) orb.style.setProperty("--core-rgb", rgb); // les anneaux et le nom suivent la couleur
+    // Toute l'interface suit la couleur de la sphère (bleu, mauve quand il parle) ; mise à jour seulement si elle change.
+    if (rgb !== lastRgb && frameNo++ % 4 === 0) document.documentElement.style.setProperty("--core-rgb", (lastRgb = rgb));
     const cx = W / 2, cy = H / 2;
     const rad = R * (1 + energy * 0.1);
 
     ctx.clearRect(0, 0, W, H);
-    // Halo lumineux.
-    const halo = ctx.createRadialGradient(cx, cy, rad * 0.82, cx, cy, rad * 1.5);
-    halo.addColorStop(0, `rgba(${rgb},0)`);
-    halo.addColorStop(0.16, `rgba(${rgb},${0.34 + energy * 0.36})`);
-    halo.addColorStop(0.42, `rgba(${rgb},${0.08 + energy * 0.1})`);
-    halo.addColorStop(1, `rgba(${rgb},0)`);
-    ctx.fillStyle = halo;
+    // Lueur très discrète derrière : c'est le réseau qui doit ressortir.
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad * 1.35);
+    glow.addColorStop(0, `rgba(${rgb},${0.05 + energy * 0.12})`);
+    glow.addColorStop(0.7, `rgba(${rgb},${0.025 + energy * 0.05})`);
+    glow.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
-    // Cœur : fond sombre + lueur qui pulse au centre.
-    ctx.fillStyle = "rgba(1,5,12,.86)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, rad * 1.02, 0, 6.283);
-    ctx.fill();
-    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    core.addColorStop(0, `rgba(${rgb},${0.16 + energy * 0.32})`);
-    core.addColorStop(0.45, `rgba(${rgb},.04)`);
-    core.addColorStop(0.9, `rgba(${rgb},.1)`);
-    core.addColorStop(1, `rgba(${rgb},.3)`);
-    ctx.fillStyle = core;
-    ctx.fill();
 
-    // Projection des points : la surface ondule (forme imparfaite) et vibre plus fort quand il parle.
+    // Projection : rotation lente + surface qui ondule (forme imparfaite), plus fort quand il parle.
     const cosY = Math.cos(spin), sinY = Math.sin(spin);
-    const tilt = 0.32 + Math.sin(t * 0.21) * 0.14;
+    const tilt = 0.3 + Math.sin(t * 0.21) * 0.12;
     const cosX = Math.cos(tilt), sinX = Math.sin(tilt);
-    const amp = m === "speaking" ? 0.08 + energy * 0.24 : m === "listening" ? 0.11 : 0.07;
+    const amp = m === "speaking" ? 0.05 + energy * 0.22 : m === "listening" ? 0.08 : 0.04;
     const tt = t * (m === "speaking" ? 2.6 : m === "thinking" ? 1.5 : 0.6);
-    const jit = m === "speaking" ? energy * 0.05 : 0.008;
-    for (const b of bins) b.length = 0;
-    for (let i = 0; i < N; i++) {
-      const p = pts[i];
+    const jit = m === "speaking" ? energy * 0.04 : 0.004;
+    for (const p of pts) {
       const n = Math.sin(p.x * 2.1 + tt) * Math.sin(p.y * 2.7 - tt * 0.8) * Math.sin(p.z * 1.9 + tt * 1.3) + 0.45 * Math.sin(p.x * 4.6 - tt * 1.6) * Math.sin(p.z * 4.1 + tt * 1.1);
       const d = 1 + amp * n + jit * Math.sin(p.k + t * 11);
       const px = p.x * d, py = p.y * d, pz = p.z * d;
       const x1 = px * cosY - pz * sinY;
       const z1 = px * sinY + pz * cosY;
-      const y2 = py * cosX - z1 * sinX;
-      const z2 = py * sinX + z1 * cosX;
       p.sx = cx + x1 * rad;
-      p.sy = cy + y2 * rad;
-      p.z2 = z2;
-      if (mini && i & 1) continue;
-      // Bord de la sphère très lumineux (comme un anneau), face avant moyenne, arrière discret.
-      const depth = Math.max(0, Math.min(1, (z2 + 1) / 2));
-      const rim = (1 - Math.min(1, Math.abs(z2))) ** 5;
-      const lum = depth * 0.45 + rim * 0.65;
-      bins[lum > 0.62 ? 3 : lum > 0.36 ? 2 : lum > 0.16 ? 1 : 0].push(p.sx, p.sy);
+      p.sy = cy + (py * cosX - z1 * sinX) * rad;
+      p.z2 = py * sinX + z1 * cosX;
     }
-    // Maillage sur la face avant.
-    if (!mini) {
-      ctx.beginPath();
-      for (let i = 0; i < links.length; i += 2) {
-        const a = pts[links[i]], b = pts[links[i + 1]];
-        if (a.z2 < 0 || b.z2 < 0) continue;
-        ctx.moveTo(a.sx, a.sy);
-        ctx.lineTo(b.sx, b.sy);
-      }
-      ctx.strokeStyle = `rgba(${rgb},${0.09 + energy * 0.12})`;
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
+    // Liaisons en trois couches (arrière, milieu, avant) pour la profondeur.
+    const layers = [new Path2D(), new Path2D(), new Path2D()];
+    const step = mini ? 4 : 2;
+    for (let i = 0; i < links.length; i += step) {
+      const a = pts[links[i]], b = pts[links[i + 1]];
+      const z = (a.z2 + b.z2) / 2;
+      const path = layers[z < -0.35 ? 0 : z < 0.3 ? 1 : 2];
+      path.moveTo(a.sx, a.sy);
+      path.lineTo(b.sx, b.sy);
     }
-    const light = `${Math.min(255, cr + 120)},${Math.min(255, cg + 80)},255`;
+    const boost = 1 + energy * 1.3;
+    [0.08, 0.17, 0.32].forEach((al, i) => {
+      ctx.strokeStyle = `rgba(${rgb},${Math.min(1, al * boost)})`;
+      ctx.lineWidth = i === 2 ? 0.8 : 0.6;
+      ctx.stroke(layers[i]);
+    });
+    // Nœuds : plus brillants devant et là où le réseau est dense.
+    for (const b of bins) b.length = 0;
+    for (const p of pts) {
+      const depth = Math.max(0, Math.min(1, (p.z2 + 1) / 2));
+      const lum = depth * 0.8 + Math.min(p.deg, 10) * 0.02;
+      bins[lum > 0.75 ? 3 : lum > 0.5 ? 2 : lum > 0.28 ? 1 : 0].push(p.sx, p.sy);
+    }
+    const light = `${Math.min(255, cr + 110)},${Math.min(255, cg + 60)},255`;
     bins.forEach((b, i) => {
       ctx.fillStyle = `rgba(${i === 3 ? light : rgb},${ALPHA[i]})`;
       const s = SIZE[i];
@@ -175,7 +182,7 @@
 
     // Étincelles (plus rapides quand il parle ou écoute).
     ctx.lineWidth = 1;
-    ctx.strokeStyle = `rgba(${rgb},.55)`;
+    ctx.strokeStyle = `rgba(${rgb},${0.05 + energy * 0.6})`;
     ctx.beginPath();
     const speed = 1 + energy * 4;
     for (const d of dust) {
@@ -218,15 +225,16 @@
   document.body.append(orb);
   const MINI = 92;
   const page0 = document.getElementById("pageAssistant");
+  // Taille fixe : la sphère grandit, rétrécit ou file en bas à droite par une simple transformation (fluide).
+  const BASE = 440;
+  orb.style.width = orb.style.height = BASE + "px";
   function place() {
     const sr = slot.getBoundingClientRect();
     const pr = page0.getBoundingClientRect();
-    const size = sr.width;
-    orb.style.width = orb.style.height = size + "px";
     const mini = isMini();
     document.body.classList.toggle("orb-mini", mini);
-    if (!mini) orb.style.transform = `translate(${sr.left - pr.left}px, ${sr.top}px)`;
-    else orb.style.transform = `translate(${innerWidth - MINI - 26}px, ${innerHeight - MINI - 26}px) scale(${MINI / size})`;
+    if (!mini) orb.style.transform = `translate(${sr.left - pr.left}px, ${sr.top}px) scale(${sr.width / BASE})`;
+    else orb.style.transform = `translate(${innerWidth - MINI - 26}px, ${innerHeight - MINI - 26}px) scale(${MINI / BASE})`;
     orb.title = mini ? "Retour à l'assistant" : "Clique pour parler";
     drawLinks();
   }
@@ -257,7 +265,10 @@
   }
 
   new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ["data-page"] });
-  new ResizeObserver(place).observe(slot);
+  // La sphère suit sa place quand le contenu autour change (réponse affichée, ligne d'infos…).
+  const follow = new ResizeObserver(() => place());
+  follow.observe(slot);
+  document.querySelectorAll("#pageAssistant .stage > *").forEach((n) => follow.observe(n));
   if (stage) new ResizeObserver(drawLinks).observe(stage);
   addEventListener("resize", place);
   // Sur téléphone la page défile : la sphère suit sans délai.

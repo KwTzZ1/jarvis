@@ -196,6 +196,13 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 - « Retiens que mon équipe préférée c'est le PSG »
 - « Quelles sont les dernières actus sur la PS5 ? »
 
+## L'interface
+
+- **Au centre, la sphère** : un réseau de points reliés qui tourne et ondule. Elle passe au **violet mauve** quand Jarvis parle, s'agite quand il écoute ou réfléchit. Clique dessus pour parler.
+- **En discussion**, la sphère se fait petite en haut et la conversation prend la place ; au bout de 2 minutes sans échange, elle reprend sa place au centre avec l'heure.
+- **Sur les autres onglets**, elle se réduit en bas à droite : un clic dessus ramène à l'Assistant.
+- **Ligne d'infos** sous la barre du haut : météo, prochain rendez-vous, mails non lus, musique en cours. Un clic (ou le bouton ☰ en haut à gauche) ouvre l'**Aperçu** avec tout le détail (agenda, mails, tâches, minuteurs, mémoire, connexions).
+
 ## Onglet Widgets
 
 - Passe d'une page à l'autre avec les onglets en haut, en **balayant** (doigt, pavé tactile à deux doigts, ou en attrapant le fond de la page à la souris) ou avec **Ctrl + flèche droite / gauche**.

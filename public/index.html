@@ -9,7 +9,6 @@
 </head>
 <body>
   <div class="grid-bg"></div>
-  <div class="scanlines" aria-hidden="true"></div>
   <div class="boot" id="boot" hidden aria-hidden="true">
     <div class="boot-box">
       <div class="boot-title">J.A.R.V.I.S</div>
@@ -21,16 +20,17 @@
 
   <header class="topbar">
     <div class="top-left">
+      <button class="icon-btn" id="drawerBtn" type="button" title="Aperçu : météo, agenda, mails, musique…"><i data-icon="list"></i></button>
       <div class="brand"><span class="brand-dot"></span><span id="brandName">JARVIS</span></div>
-      <nav class="tabs" role="tablist" aria-label="Pages">
-        <button class="tab active" role="tab" data-page="0" aria-selected="true"><i data-icon="message" data-size="15"></i>Assistant</button>
-        <button class="tab" role="tab" data-page="1" aria-selected="false"><i data-icon="grid" data-size="15"></i>Widgets</button>
-        <button class="tab" role="tab" data-page="2" aria-selected="false"><i data-icon="globe" data-size="15"></i>Web</button>
-        <button class="tab" role="tab" data-page="3" aria-selected="false"><i data-icon="folder" data-size="15"></i>Projets</button>
-      </nav>
     </div>
-    <div class="clock"><span id="clockTime">--:--</span><span id="clockDate"></span></div>
+    <nav class="tabs" role="tablist" aria-label="Pages">
+      <button class="tab active" role="tab" data-page="0" aria-selected="true"><i data-icon="message" data-size="15"></i>Assistant</button>
+      <button class="tab" role="tab" data-page="1" aria-selected="false"><i data-icon="grid" data-size="15"></i>Widgets</button>
+      <button class="tab" role="tab" data-page="2" aria-selected="false"><i data-icon="globe" data-size="15"></i>Web</button>
+      <button class="tab" role="tab" data-page="3" aria-selected="false"><i data-icon="folder" data-size="15"></i>Projets</button>
+    </nav>
     <div class="top-actions">
+      <div class="clock"><span id="clockTime">--:--</span><span id="clockDate"></span></div>
       <button class="kbd-hint" id="paletteBtn" type="button" title="Palette de commandes"><i data-icon="zap" data-size="13"></i>Rechercher <kbd>Ctrl K</kbd></button>
       <span class="cost" id="cost" title="Coût IA de cette session"><i data-icon="coins" data-size="14"></i><span id="costValue">0,000 $</span></span>
       <button class="icon-btn" id="voiceToggle" title="Voix de l'assistant"><i data-icon="volume"></i></button>
@@ -39,16 +39,39 @@
     </div>
   </header>
 
-  <div class="pager" id="pager">
-  <div class="track" id="track">
-  <main class="layout page" id="pageAssistant">
-    <!-- Colonne gauche -->
-    <aside class="col">
+  <!-- Aperçu (tiroir) : tout le détail, rangé hors de la vue -->
+  <aside class="drawer" id="drawer" aria-label="Aperçu">
+    <div class="drawer-head"><span>Aperçu</span><button class="icon-btn" id="drawerClose" type="button" title="Fermer (Échap)"><i data-icon="x"></i></button></div>
+    <div class="drawer-body">
       <section class="panel">
         <h2><span><i data-icon="cloud-sun" data-size="14"></i>Météo</span></h2>
         <div id="weather" class="muted">Chargement…</div>
       </section>
-
+      <section class="panel">
+        <h2><span><i data-icon="music" data-size="14"></i>Spotify</span></h2>
+        <div id="music" class="muted">Non connecté</div>
+      </section>
+      <section class="panel">
+        <h2><span><i data-icon="calendar" data-size="14"></i>Agenda</span><button class="link-btn" data-refresh title="Actualiser"><i data-icon="refresh" data-size="14"></i></button></h2>
+        <ul id="events" class="list"></ul>
+      </section>
+      <section class="panel">
+        <h2><span><i data-icon="mail" data-size="14"></i>Mails non lus</span></h2>
+        <ul id="emails" class="list"></ul>
+      </section>
+      <section class="panel">
+        <h2><span><i data-icon="tasks" data-size="14"></i>Tâches</span></h2>
+        <ul id="tasks" class="list"></ul>
+      </section>
+      <section class="panel" id="timersPanel" hidden>
+        <h2><span><i data-icon="timer" data-size="14"></i>Minuteurs</span></h2>
+        <ul id="timers" class="list"></ul>
+      </section>
+      <section class="panel">
+        <h2><span><i data-icon="bookmark" data-size="14"></i>Mémoire</span></h2>
+        <ul id="memory" class="list small"></ul>
+        <p class="hint">Dis « retiens que… » pour m'apprendre quelque chose.</p>
+      </section>
       <section class="panel">
         <h2><span><i data-icon="plug" data-size="14"></i>Connexions</span></h2>
         <div class="conn" id="connAi"><span class="led"></span><span>IA Claude</span><small id="modelName"></small></div>
@@ -57,39 +80,17 @@
         <div class="conn" id="connSpotify"><span class="led"></span><span>Spotify</span><button class="mini-btn">Connecter</button></div>
         <div class="conn" id="connDiscord"><span class="led"></span><span>Discord</span><button class="mini-btn">Régler</button></div>
       </section>
+    </div>
+  </aside>
 
-      <section class="panel">
-        <h2><span><i data-icon="bookmark" data-size="14"></i>Mémoire</span></h2>
-        <ul id="memory" class="list small"></ul>
-        <p class="hint">Dis « retiens que… » pour m'apprendre quelque chose.</p>
-      </section>
-
-      <section class="panel" id="timersPanel" hidden>
-        <h2><span><i data-icon="timer" data-size="14"></i>Minuteurs</span></h2>
-        <ul id="timers" class="list"></ul>
-      </section>
-    </aside>
-
-    <!-- Centre -->
-    <section class="center">
+  <div class="pager" id="pager">
+  <div class="track" id="track">
+  <main class="page assistant" id="pageAssistant">
+    <section class="stage">
+      <div class="glance" id="glance"></div>
       <div class="core-stage">
-        <svg class="core-links" aria-hidden="true"></svg>
-        <div class="gauge g-tl" data-k="cpu"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>CPU</span></div>
-        <div class="gauge g-bl" data-k="ram"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>MÉMOIRE</span></div>
-        <div class="gauge g-tr" data-k="disk"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>DISQUE</span></div>
-        <div class="gauge g-br" data-k="up"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>EN LIGNE</span></div>
         <div class="core-wrap">
-          <svg class="hud-rings" viewBox="0 0 200 200" aria-hidden="true">
-            <circle class="hr hr1" cx="100" cy="100" r="99" />
-            <circle class="hr-ticks" cx="100" cy="100" r="93.5" pathLength="60" />
-            <circle class="hr-sec" id="hudSec" cx="100" cy="100" r="93.5" pathLength="60" />
-            <circle class="hr hr2" cx="100" cy="100" r="88" />
-            <circle class="hr hr3" cx="100" cy="100" r="84" />
-            <g class="hr-arcs">
-              <path class="hr-arc" d="M190.07 48 A104 104 0 0 1 190.07 152" />
-              <path class="hr-arc" d="M9.93 152 A104 104 0 0 1 9.93 48" />
-            </g>
-          </svg>
+          <svg class="hud-rings" viewBox="0 0 200 200" aria-hidden="true"><circle class="hr hr1" cx="100" cy="100" r="99" /></svg>
           <div class="reactor" id="reactor" title="Clique pour parler">
             <canvas id="coreCanvas"></canvas>
             <div class="core-label" id="coreLabel">JARVIS</div>
@@ -98,16 +99,13 @@
       </div>
       <div class="core-clock"><span id="bigTime">--:--</span><span id="bigDate"></span></div>
       <div class="state" id="state">En ligne</div>
-
+      <div class="chat" id="chat"></div>
       <div class="chips">
         <button class="chip" data-prompt="Fais-moi mon briefing : météo du jour, mon agenda d'aujourd'hui et demain, mes mails non lus importants et mes tâches."><i data-icon="sunrise" data-size="15"></i>Briefing</button>
         <button class="chip" data-prompt="Qu'est-ce que j'ai de prévu cette semaine ?"><i data-icon="calendar" data-size="15"></i>Ma semaine</button>
         <button class="chip" data-prompt="Résume mes mails non lus."><i data-icon="mail" data-size="15"></i>Mes mails</button>
         <button class="chip" data-prompt="Mets-moi de la musique pour me concentrer."><i data-icon="headphones" data-size="15"></i>Musique focus</button>
       </div>
-
-      <div class="chat" id="chat"></div>
-
       <div class="attach-strip" id="attachStrip" hidden></div>
       <form class="composer" id="composer">
         <button type="button" class="mic" id="micBtn" title="Parler (ou maintiens Espace)"><i data-icon="mic" data-size="20"></i></button>
@@ -117,29 +115,6 @@
         <button type="submit" class="send" title="Envoyer"><i data-icon="arrow-up" data-size="20"></i></button>
       </form>
     </section>
-
-    <!-- Colonne droite -->
-    <aside class="col">
-      <section class="panel">
-        <h2><span><i data-icon="music" data-size="14"></i>Spotify</span></h2>
-        <div id="music" class="muted">Non connecté</div>
-      </section>
-
-      <section class="panel">
-        <h2><span><i data-icon="calendar" data-size="14"></i>Agenda</span><button class="link-btn" data-refresh title="Actualiser"><i data-icon="refresh" data-size="14"></i></button></h2>
-        <ul id="events" class="list"></ul>
-      </section>
-
-      <section class="panel">
-        <h2><span><i data-icon="mail" data-size="14"></i>Mails non lus</span></h2>
-        <ul id="emails" class="list"></ul>
-      </section>
-
-      <section class="panel">
-        <h2><span><i data-icon="tasks" data-size="14"></i>Tâches</span></h2>
-        <ul id="tasks" class="list"></ul>
-      </section>
-    </aside>
   </main>
 
   <!-- Page Widgets : on y range ses widgets, on peut les empiler -->
@@ -231,5 +206,6 @@
   <script src="projects.js"></script>
   <script src="palette.js"></script>
   <script src="core.js"></script>
+  <script src="clean.js"></script>
 </body>
 </html>
