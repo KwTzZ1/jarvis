@@ -112,6 +112,8 @@ function tick() {
   const now = new Date();
   $("#clockTime").textContent = now.toLocaleTimeString("fr-FR");
   $("#clockDate").textContent = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  $("#bigTime").textContent = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  $("#bigDate").textContent = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   if (!document.hidden) emit("tick");
 }
 setInterval(tick, 1000);
@@ -124,6 +126,7 @@ function applyStatus(s) {
   state.name = s.name;
   document.title = s.name.toUpperCase();
   $("#brandName").textContent = s.name.toUpperCase();
+  $("#coreLabel").textContent = s.name.toUpperCase();
   const first = !state.status;
   const prevProvider = state.status?.provider;
   state.status = s;
@@ -1068,6 +1071,18 @@ function speakPiper(parts, id, done) {
         const url = URL.createObjectURL(blob);
         piperAudio = new Audio(url);
         piperAudio.onended = piperAudio.onerror = () => (URL.revokeObjectURL(url), playNext());
+        try {
+          const ac = (speakPiper.ac ||= new AudioContext());
+          if (ac.state !== "running") ac.resume();
+          else {
+            const an = (speakPiper.an ||= Object.assign(ac.createAnalyser(), { fftSize: 256 }));
+            an.connect(ac.destination);
+            ac.createMediaElementSource(piperAudio).connect(an);
+            window.jarvisCore = Object.assign(window.jarvisCore || {}, { analyser: an });
+          }
+        } catch {
+          // Pas d'analyse du son : la sphère s'anime quand même.
+        }
         piperAudio.play().catch(playNext);
       },
       () => {

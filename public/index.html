@@ -9,6 +9,15 @@
 </head>
 <body>
   <div class="grid-bg"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="boot" id="boot" hidden aria-hidden="true">
+    <div class="boot-box">
+      <div class="boot-title">J.A.R.V.I.S</div>
+      <div class="boot-sub">Just A Rather Very Intelligent System</div>
+      <div class="boot-bar"><span></span></div>
+      <div class="boot-log"></div>
+    </div>
+  </div>
 
   <header class="topbar">
     <div class="top-left">
@@ -63,12 +72,18 @@
 
     <!-- Centre -->
     <section class="center">
-      <div class="reactor" id="reactor" title="Clique pour parler">
-        <div class="ring r1"></div>
-        <div class="ring r2"></div>
-        <div class="ring r3"></div>
-        <div class="core"></div>
+      <div class="core-wrap">
+        <svg class="hud-rings" viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="hr hr1" cx="100" cy="100" r="96" />
+          <circle class="hr hr2" cx="100" cy="100" r="90" />
+          <circle class="hr hr3" cx="100" cy="100" r="84" />
+        </svg>
+        <div class="reactor" id="reactor" title="Clique pour parler">
+          <canvas id="coreCanvas"></canvas>
+          <div class="core-label" id="coreLabel">JARVIS</div>
+        </div>
       </div>
+      <div class="core-clock"><span id="bigTime">--:--</span><span id="bigDate"></span></div>
       <div class="state" id="state">En ligne</div>
 
       <div class="chips">
@@ -202,5 +217,6 @@
   <script src="web.js"></script>
   <script src="projects.js"></script>
   <script src="palette.js"></script>
+  <script src="core.js"></script>
 </body>
 </html>
