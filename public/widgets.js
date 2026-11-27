@@ -5,12 +5,52 @@
 // ---------- Pages qui glissent ----------
 const pager = $("#pager");
 const track = $("#track");
-let page = [0, 1, 2].includes(Number(localStorage.getItem("page"))) ? Number(localStorage.getItem("page")) : 0;
-
-const PAGE_IDS = ["pageAssistant", "pageWidgets", "pageWeb"];
+const PAGE_IDS = ["pageAssistant", "pageWidgets", "pageWeb", "pageProjects"];
 const LAST_PAGE = PAGE_IDS.length - 1;
+let page = Math.min(LAST_PAGE, Math.max(0, Number(localStorage.getItem("page")) || 0));
+track.style.setProperty("--pages", PAGE_IDS.length);
+
+// Petit "swoosh" de changement d'onglet (son synthétisé, rien à télécharger).
+function switchSound(direction) {
+  if (state.status && state.status.uiSounds === false) return;
+  try {
+    const ctx = (switchSound.ctx ||= new AudioContext());
+    const t = ctx.currentTime;
+    // Souffle filtré qui glisse vers l'aigu ou le grave selon le sens.
+    const noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.18), ctx.sampleRate);
+    const data = noise.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.Q.value = 6;
+    filter.frequency.setValueAtTime(direction > 0 ? 700 : 2600, t);
+    filter.frequency.exponentialRampToValueAtTime(direction > 0 ? 2600 : 700, t + 0.16);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    src.connect(filter).connect(g).connect(ctx.destination);
+    src.start(t);
+    // Petit "clic" cristallin à l'arrivée.
+    const o = ctx.createOscillator();
+    const og = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(direction > 0 ? 1320 : 990, t + 0.12);
+    og.gain.setValueAtTime(0.0001, t + 0.12);
+    og.gain.exponentialRampToValueAtTime(0.06, t + 0.13);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o.connect(og).connect(ctx.destination);
+    o.start(t + 0.12);
+    o.stop(t + 0.24);
+  } catch {}
+}
+
 function goTo(p, animate = true) {
-  page = Math.max(0, Math.min(LAST_PAGE, p));
+  const target = Math.max(0, Math.min(LAST_PAGE, p));
+  if (animate && target !== page) switchSound(target - page);
+  page = target;
   track.style.transition = animate ? "" : "none";
   track.style.transform = `translateX(${(-page * 100) / PAGE_IDS.length}%)`;
   document.querySelectorAll(".tab").forEach((t) => {
@@ -33,7 +73,7 @@ pager.addEventListener("scroll", () => {
 
 // Balayage au doigt, au stylet ou à la souris (en attrapant le fond de la page).
 let swipe = null;
-const SWIPE_BACKGROUNDS = ".page, .layout, .col, .center, .chat, .board, .board-page, .board-toolbar, .track, .chips, .web-tabs";
+const SWIPE_BACKGROUNDS = ".page, .layout, .col, .center, .chat, .board, .board-page, .board-toolbar, .track, .chips, .web-tabs, .projects-page, .projects";
 pager.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   if (e.target.closest("input, textarea, select, button, a, label, .add-menu, .msg, .draft")) return;
@@ -118,6 +158,7 @@ const WIDGET_TYPES = {
   memory: { title: "Mémoire", icon: "bookmark", size: "s", render: renderMemoryWidget },
   shortcuts: { title: "Raccourcis", icon: "zap", size: "m", render: renderShortcutsWidget },
   discord: { title: "Discord", icon: "message", size: "t", render: renderDiscordWidget },
+  images: { title: "Mes images", icon: "image", size: "m", render: renderImagesWidget },
 };
 const SIZES = ["s", "m", "t", "l"];
 const SIZE_LABELS = { s: "petit", m: "large", t: "haut", l: "grand" };
@@ -131,6 +172,7 @@ const WIDGET_DEPS = {
   tick: ["clock"],
   discord: ["discord"],
   status: ["discord"],
+  images: ["images"],
 };
 for (const [hook, types] of Object.entries(WIDGET_DEPS)) hooks[hook].push(() => renderTypes(types));
 
@@ -229,6 +271,49 @@ function renderAskWidget(body) {
   const last = state.lastReply;
   reply.classList.toggle("muted", !last);
   reply.textContent = last ? last.text : `Pose-moi une question ici, ou dis « ${state.name} ».`;
+}
+
+// ---------- Mes images (créées par Jarvis) ----------
+const imagesState = { list: null, loading: false };
+async function loadImages() {
+  if (imagesState.loading) return;
+  imagesState.loading = true;
+  try {
+    imagesState.list = (await api("/api/images")).images;
+  } catch {
+    imagesState.list = imagesState.list || [];
+  } finally {
+    imagesState.loading = false;
+  }
+  renderTypes(["images"]);
+}
+hooks.images.push(() => setTimeout(loadImages, 300));
+
+function renderImagesWidget(body) {
+  if (!imagesState.list) {
+    body.replaceChildren(el("div", "muted", "Chargement…"));
+    loadImages();
+    return;
+  }
+  const grid = el("div", "img-grid");
+  if (!imagesState.list.length) {
+    body.replaceChildren(el("div", "muted", "Aucune image pour l'instant. Demande : « fais-moi une image de… »."));
+    return;
+  }
+  for (const i of imagesState.list.slice(0, 24)) {
+    const a = el("a", "img-thumb");
+    a.href = i.url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.title = i.prompt;
+    const img = el("img");
+    img.src = i.url;
+    img.alt = i.prompt;
+    img.loading = "lazy";
+    a.append(img);
+    grid.append(a);
+  }
+  body.replaceChildren(grid);
 }
 
 // ---------- Discord ----------
@@ -372,6 +457,7 @@ function defaultBoard() {
     { stack: ["timers"], size: "s" },
     { stack: ["shortcuts"], size: "m" },
     { stack: ["discord"], size: "t" },
+    { stack: ["images"], size: "m" },
   ].map((s) => ({ id: uid(), cur: 0, ...s }));
 }
 function loadBoard() {

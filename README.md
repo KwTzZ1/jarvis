@@ -10,7 +10,9 @@ Assistant personnel pour Windows, avec une interface façon HUD. Tu lui parles �
 - **Spotify** : ce qui joue, pause, suivant, volume, et lancer un titre, un artiste ou une playlist
 - **Météo** : gratuite, sans compte
 - **Discord** : lire tes salons et y écrire, via ton propre bot
-- **Onglet Web** : recherche Google ou Bing et sites directement dans Jarvis
+- **Onglet Web** : recherche Google ou Bing et sites directement dans Jarvis, avec YouTube intégré
+- **Onglet Projets** : tous tes projets (sites, bots, applis) avec leurs liens, que Jarvis connaît aussi
+- **Images** : joins des images (il les voit) et demande-lui d'en créer
 
 Et aussi :
 
@@ -116,7 +118,21 @@ Ensuite :
 
 Les messages sont postés au nom du bot.
 
-## 5. Onglet Web
+## 5. YouTube
+
+Le site youtube.com refuse d'être affiché dans une autre appli, mais son lecteur vidéo l'accepte. Jarvis a donc sa propre vue YouTube :
+- recherche avec vignettes ;
+- lecture dans Jarvis ;
+- « mets la vidéo de … » à la voix.
+
+Pour chercher, il faut une **clé YouTube gratuite** (environ 100 recherches par jour) :
+1. Dans ton projet Google Cloud (le même que pour l'agenda), active **YouTube Data API v3** : https://console.cloud.google.com/apis/library/youtube.googleapis.com
+2. Dans **APIs et services > Identifiants**, clique **Créer des identifiants > Clé API**, puis copie-la.
+3. Colle-la dans **Réglages > YouTube**.
+
+Sans clé, les liens YouTube collés dans la barre d'adresse se lisent quand même.
+
+## 6. Onglet Web
 
 Troisième page : barre d'adresse, plusieurs onglets, précédent, suivant, recharger, accueil.
 - Tape une recherche ou une adresse. La recherche passe par Google, ou Bing (au choix dans **Réglages > Recherche**).
@@ -126,6 +142,31 @@ Troisième page : barre d'adresse, plusieurs onglets, précédent, suivant, rech
 - Si Google affiche une page « trafic inhabituel », passe sur Bing dans les réglages.
 
 ---
+
+## 7. Images
+
+- **Joindre une image :**
+  - trombone à gauche de la zone de texte, Ctrl+V pour coller une capture, ou glisser-déposer ;
+  - 3 images maximum par message ;
+  - Claude les voit directement. Avec l'IA gratuite, Jarvis passe tout seul sur un modèle gratuit qui voit les images (Qwen 3.8 chez Groq).
+- **Créer une image :**
+  - dis « fais-moi une image de … » ;
+  - c'est gratuit et sans compte, via Pollinations ;
+  - limites : une image toutes les 45 secondes, petit logo en bas à droite, et une image est visible par toute personne qui a son lien ;
+  - les images sont gardées dans `data/images` et dans le widget « Mes images ».
+
+## 8. Onglet Projets
+
+- Une carte par projet : statut, étiquettes, et boutons Site (ouvert dans l'onglet Web), GitHub, Hébergement et Dossier (ouvre l'explorateur).
+- La pastille verte ou rouge indique si le site répond.
+- **Synchroniser GitHub** ajoute les dépôts qui manquent ; il utilise l'outil `gh` connecté sur le PC.
+- Jarvis connaît la liste : « quels sont mes projets ? », « ouvre le site de KwMail », « ouvre le dossier de Jarvis ».
+- La liste est enregistrée dans `data/projects.json`, sur ton PC uniquement.
+
+## Spotify : playlists et titres likés
+
+« Mets ma playlist Chill » cherche d'abord dans **tes** playlists. « Mets mes titres likés » lance tes coups de cœur. Le widget Spotify a aussi un menu « Mes playlists ».
+Spotify ne laisse pas les nouvelles applis lire ses propres playlists automatiques (Découvertes de la semaine, Daylist, Mix…).
 
 ## Exemples
 
@@ -173,11 +214,15 @@ lib/google.js        Agenda, Gmail, Tâches
 lib/spotify.js       Spotify
 lib/weather.js       Météo (Open-Meteo)
 lib/discord.js       Discord (bot)
+lib/youtube.js       recherche YouTube
+lib/images.js        création d'images (Pollinations) et images jointes
+lib/projects.js      onglet Projets
 lib/web.js           Onglet Web : vérifie si un site accepte d'être affiché
 public/              interface (HTML, CSS, JS, icônes SVG)
 public/widgets.js    onglet Widgets (pages qui glissent, déplacer, empiler)
 public/web.js        onglet Web (petit navigateur)
 public/player.js     lecteur Spotify intégré (Premium)
+public/projects.js   onglet Projets
 public/fonts/        polices Orbitron, Exo 2, Share Tech Mono (licence OFL)
 launcher/            lanceur Windows, icône près de l'horloge, installation
 ```

@@ -17,6 +17,7 @@
         <button class="tab active" role="tab" data-page="0" aria-selected="true"><i data-icon="message" data-size="15"></i>Assistant</button>
         <button class="tab" role="tab" data-page="1" aria-selected="false"><i data-icon="grid" data-size="15"></i>Widgets</button>
         <button class="tab" role="tab" data-page="2" aria-selected="false"><i data-icon="globe" data-size="15"></i>Web</button>
+        <button class="tab" role="tab" data-page="3" aria-selected="false"><i data-icon="folder" data-size="15"></i>Projets</button>
       </nav>
     </div>
     <div class="clock"><span id="clockTime">--:--</span><span id="clockDate"></span></div>
@@ -78,8 +79,11 @@
 
       <div class="chat" id="chat"></div>
 
+      <div class="attach-strip" id="attachStrip" hidden></div>
       <form class="composer" id="composer">
         <button type="button" class="mic" id="micBtn" title="Parler (ou maintiens Espace)"><i data-icon="mic" data-size="20"></i></button>
+        <button type="button" class="mic" id="attachBtn" title="Joindre une image (ou colle-la avec Ctrl+V, ou glisse-la ici)"><i data-icon="paperclip" data-size="19"></i></button>
+        <input type="file" id="attachInput" accept="image/*" multiple hidden />
         <input id="input" autocomplete="off" placeholder="Parle-moi ou écris ici…" />
         <button type="submit" class="send" title="Envoyer"><i data-icon="arrow-up" data-size="20"></i></button>
       </form>
@@ -141,6 +145,21 @@
     </form>
     <div class="web-view" id="webView"></div>
   </section>
+
+  <!-- Page Projets : tous les projets réalisés, avec leurs liens -->
+  <section class="page projects-page" id="pageProjects" aria-label="Projets">
+    <div class="board-toolbar">
+      <div>
+        <h1 class="board-title">Projets</h1>
+        <p class="hint">Tes projets et leurs liens. Jarvis les connaît aussi : « ouvre le site de KwMail », « où en est mon bot Vinyle ? ».</p>
+      </div>
+      <div class="board-actions">
+        <button class="btn ghost" id="projSync" type="button" title="Ajouter les dépôts GitHub qui manquent"><i data-icon="refresh" data-size="15"></i>Synchroniser GitHub</button>
+        <button class="btn" id="projAdd" type="button"><i data-icon="plus" data-size="15"></i>Ajouter</button>
+      </div>
+    </div>
+    <div class="projects" id="projects"></div>
+  </section>
   </div>
   </div>
 
@@ -180,5 +199,6 @@
   <script src="player.js"></script>
   <script src="widgets.js"></script>
   <script src="web.js"></script>
+  <script src="projects.js"></script>
 </body>
 </html>

@@ -29,7 +29,7 @@ const state = {
 // Dernières données reçues, partagées entre la page principale et les widgets.
 const cache = { dashboard: null, music: null };
 // Petits "abonnements" : les widgets se redessinent quand les données changent.
-const hooks = { data: [], music: [], timers: [], reply: [], tick: [], status: [], discord: [] };
+const hooks = { data: [], music: [], timers: [], reply: [], tick: [], status: [], discord: [], images: [] };
 const emit = (name) => hooks[name].forEach((fn) => {
   try {
     fn();
@@ -384,11 +384,85 @@ async function refreshAll() {
   }
 }
 
+// Menu "Mes playlists" + "Titres likés", gardé entre deux rafraîchissements (le menu ne se ferme pas tout seul).
+const spotifyLib = { playlists: null, loading: false };
+async function loadPlaylists() {
+  if (spotifyLib.loading || spotifyLib.playlists) return;
+  spotifyLib.loading = true;
+  try {
+    spotifyLib.playlists = (await api("/api/spotify/playlists")).playlists;
+    document.querySelectorAll(".sp-lib").forEach(fillPlaylistSelect);
+  } catch {
+    spotifyLib.playlists = null;
+  } finally {
+    spotifyLib.loading = false;
+  }
+}
+function fillPlaylistSelect(lib) {
+  const sel = lib.querySelector("select");
+  if (!spotifyLib.playlists || sel.dataset.filled) return;
+  for (const p of spotifyLib.playlists) {
+    const o = el("option", null, p.name + (p.tracks != null ? ` (${p.tracks})` : ""));
+    o.value = p.name;
+    sel.append(o);
+  }
+  sel.dataset.filled = "1";
+}
+function buildSpotifyLib() {
+  const lib = el("div", "sp-lib");
+  const sel = el("select");
+  const first = el("option", null, "Mes playlists…");
+  first.value = "";
+  sel.append(first);
+  sel.onchange = async () => {
+    if (!sel.value) return;
+    const name = sel.value;
+    sel.value = "";
+    try {
+      await api("/api/spotify/play", { method: "POST", body: { playlist: name } });
+      toast(`Lecture : ${name}`);
+      setTimeout(refreshMusic, 800);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  const liked = el("button", "proj-link");
+  liked.type = "button";
+  liked.title = "Lancer tes titres likés (aléatoire)";
+  liked.append(iconEl("heart", 14), document.createTextNode("Titres likés"));
+  liked.onclick = async () => {
+    try {
+      await api("/api/spotify/play", { method: "POST", body: { liked: true } });
+      toast("Lecture : tes titres likés");
+      setTimeout(refreshMusic, 800);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  lib.append(sel, liked);
+  fillPlaylistSelect(lib);
+  return lib;
+}
+
 function renderMusicInto(box, r) {
+  const keptLib = box.querySelector(".sp-lib");
+  const withLib = () => {
+    const sp = state.status?.spotify;
+    if (!sp?.connected) return;
+    if (!sp.scopesOk) {
+      box.append(el("div", "hint", "Pour tes playlists et titres likés : Déconnecter puis Connecter Spotify (nouvelles autorisations)."));
+      return;
+    }
+    loadPlaylists();
+    box.append(keptLib || buildSpotifyLib());
+  };
   box.replaceChildren();
   if (!r) return (box.textContent = "Chargement…");
   if (r.error === "not_connected") return (box.textContent = "Connecte Spotify pour voir et contrôler ta musique.");
-  if (r.error) return (box.textContent = r.error);
+  if (r.error) {
+    box.textContent = r.error;
+    return withLib();
+  }
   const m = r.data;
   if (!m.title) {
     const sp = state.status?.spotify;
@@ -397,7 +471,7 @@ function renderMusicInto(box, r) {
       : sp?.playerReady
         ? "Lecteur Jarvis prêt : dis « joue » suivi d'un titre ou d'un artiste."
         : "Rien en lecture. Demande-moi de mettre de la musique.";
-    return;
+    return withLib();
   }
   const np = el("div", "np");
   if (m.image) {
@@ -432,6 +506,7 @@ function renderMusicInto(box, r) {
     controls.append(b);
   });
   box.append(np, bar, controls);
+  withLib();
 }
 
 async function refreshMusic() {
@@ -466,27 +541,137 @@ function addTyping() {
   return m;
 }
 
+// ---------- Images jointes ----------
+state.attachments = [];
+const MAX_ATTACH = 3;
+
+// Réduit l'image (1280 px max) pour un envoi rapide et peu coûteux.
+async function shrinkImage(file) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff"; // fond blanc pour les PNG transparents
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+async function addAttachments(files) {
+  const images = [...files].filter((f) => f.type.startsWith("image/"));
+  if (!images.length) return;
+  for (const f of images) {
+    if (state.attachments.length >= MAX_ATTACH) {
+      toast(`${MAX_ATTACH} images maximum par message.`, true);
+      break;
+    }
+    try {
+      state.attachments.push(await shrinkImage(f));
+    } catch {
+      toast(`Image illisible : ${f.name || "image"}`, true);
+    }
+  }
+  renderAttachments();
+  $("#input").focus();
+}
+
+function renderAttachments() {
+  const strip = $("#attachStrip");
+  strip.replaceChildren();
+  state.attachments.forEach((src, i) => {
+    const item = el("div", "attach-item");
+    const img = el("img");
+    img.src = src;
+    img.alt = "Image jointe";
+    const x = el("button", "attach-x");
+    x.type = "button";
+    x.title = "Retirer";
+    x.append(iconEl("x", 12));
+    x.onclick = () => {
+      state.attachments.splice(i, 1);
+      renderAttachments();
+    };
+    item.append(img, x);
+    strip.append(item);
+  });
+  strip.hidden = !state.attachments.length;
+}
+
+$("#attachBtn").addEventListener("click", () => $("#attachInput").click());
+$("#attachInput").addEventListener("change", (e) => {
+  addAttachments(e.target.files);
+  e.target.value = "";
+});
+// Coller une image (capture d'écran, etc.) quand on est sur la page Assistant.
+document.addEventListener("paste", (e) => {
+  if (document.querySelector("#pageAssistant")?.inert) return;
+  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (files.length) {
+    e.preventDefault();
+    addAttachments(files);
+  }
+});
+// Glisser-déposer sur la page Assistant.
+const dropZone = document.querySelector("#pageAssistant");
+dropZone.addEventListener("dragover", (e) => {
+  if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === "file")) {
+    e.preventDefault();
+    dropZone.classList.add("dropping");
+  }
+});
+dropZone.addEventListener("dragleave", (e) => {
+  if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove("dropping");
+});
+dropZone.addEventListener("drop", (e) => {
+  dropZone.classList.remove("dropping");
+  if (e.dataTransfer?.files?.length) {
+    e.preventDefault();
+    addAttachments(e.dataTransfer.files);
+  }
+});
+
 // Retourne false si la demande n'a pas pu partir (Jarvis déjà occupé).
 function send(text) {
   text = (text || "").trim();
-  if (!text) return true;
+  if (!text && !state.attachments.length) return true;
   if (state.busy) {
     toast("Patiente une seconde, je termine ma réponse.");
     return false;
   }
-  ask(text);
+  const images = state.attachments.splice(0);
+  renderAttachments();
+  ask(text || "Décris cette image.", images);
   return true;
 }
 
-async function ask(text) {
+async function ask(text, images = []) {
   state.busy = true;
   stopSpeaking();
-  addMsg("user", text);
-  state.history.push({ role: "user", content: text });
+  const userBubble = addMsg("user", text);
+  if (images.length) {
+    const row = el("div", "msg-images");
+    images.forEach((src) => {
+      const img = el("img");
+      img.src = src;
+      img.alt = "Image jointe";
+      row.append(img);
+    });
+    userBubble.prepend(row);
+  }
+  const entry = { role: "user", content: text, images: images.length ? images : undefined };
+  state.history.push(entry);
   const typing = addTyping();
   setMode("thinking");
   try {
     const r = await api("/api/chat", { method: "POST", body: { history: state.history } });
+    // Les images ne sont envoyées qu'une fois : ensuite on garde juste une mention dans l'historique.
+    if (entry.images) {
+      delete entry.images;
+      entry.content += ` [${images.length} image(s) jointe(s)]`;
+    }
     typing.remove();
     const bubble = addMsg("bot", r.reply);
     // Petite étiquette quand c'est l'IA gratuite qui a répondu.
@@ -509,6 +694,11 @@ async function ask(text) {
     typing.remove();
     addMsg("bot", e.message, "error");
     state.history.pop();
+    // On remet les images dans la zone d'envoi pour pouvoir réessayer.
+    if (images.length && !state.attachments.length) {
+      state.attachments = images;
+      renderAttachments();
+    }
     state.busy = false;
     idleMode();
   } finally {
@@ -560,6 +750,14 @@ function handleAction(a) {
     case "discord_draft":
       showDiscordDraft(a);
       break;
+    case "image":
+      showGeneratedImage(a);
+      emit("images");
+      break;
+    case "youtube":
+      // La recherche est gardée dans l'adresse : les autres résultats s'affichent sous la vidéo.
+      if (window.openInJarvis) window.openInJarvis(`https://www.youtube.com/watch?${new URLSearchParams({ v: a.id, search_query: a.query || "" })}`);
+      break;
   }
 }
 
@@ -596,6 +794,32 @@ function showDraft(a) {
     state.history.push({ role: "assistant", content: "Mail annulé." });
   };
   $("#chat").append(node);
+  scrollChat();
+}
+
+// Image créée par Jarvis : affichée dans le chat.
+function showGeneratedImage(a) {
+  const card = el("div", "msg bot gen-image");
+  card.dataset.name = state.name.toUpperCase() + " · IMAGE";
+  const img = el("img");
+  img.src = a.url;
+  img.alt = a.prompt;
+  img.title = a.prompt;
+  img.onload = scrollChat;
+  const actions = el("div", "gen-actions");
+  const open = el("a", "proj-link");
+  open.href = a.url;
+  open.target = "_blank";
+  open.rel = "noopener";
+  open.append(iconEl("external", 14), document.createTextNode("Ouvrir en grand"));
+  const dl = el("a", "proj-link");
+  dl.href = a.url;
+  dl.download = "jarvis-image.jpg";
+  dl.append(iconEl("arrow-up", 14), document.createTextNode("Télécharger"));
+  dl.querySelector(".ic").style.transform = "rotate(180deg)";
+  actions.append(open, dl);
+  card.append(img, actions);
+  $("#chat").append(card);
   scrollChat();
 }
 

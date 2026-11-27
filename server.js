@@ -10,6 +10,9 @@ import { publicSettings, updateSettings } from "./lib/config.js";
 import { save } from "./lib/store.js";
 import * as discord from "./lib/discord.js";
 import { checkPage } from "./lib/web.js";
+import * as projects from "./lib/projects.js";
+import { searchVideos, youtubeConfigured } from "./lib/youtube.js";
+import * as images from "./lib/images.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_URL = `http://127.0.0.1:${PORT}`;
@@ -32,7 +35,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "25mb" })); // images jointes au chat
 app.use(express.static("public", { maxAge: 0 }));
 
 function wrap(fn) {
@@ -58,12 +61,15 @@ function status() {
     provider: activeProvider(),
     providerPref: process.env.AI_PROVIDER || "auto",
     webEngine: process.env.WEB_ENGINE || "google",
+    uiSounds: process.env.UI_SOUNDS !== "false",
+    youtube: youtubeConfigured(),
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
     spotify: {
       configured: spotify.spotifyConfigured(),
       connected: spotify.spotifyConnected(),
       playerAllowed: spotify.spotifyConnected() && spotify.playerAllowed(),
       playerReady: spotify.playerReady(),
+      scopesOk: spotify.spotifyConnected() && spotify.scopesOk(),
     },
     usage: usageTotals,
   };
@@ -178,6 +184,22 @@ app.get(
     if (!spotify.spotifyConnected()) return res.status(404).json({ error: "Spotify n'est pas connecté." });
     res.set("Cache-Control", "no-store");
     res.json({ token: await spotify.playerToken() });
+  }),
+);
+app.get(
+  "/api/spotify/playlists",
+  wrap(async (req, res) => {
+    if (!spotify.spotifyConnected()) return res.status(404).json({ error: "Spotify n'est pas connecté." });
+    res.json({ playlists: await spotify.myPlaylists(req.query.refresh === "1") });
+  }),
+);
+app.post(
+  "/api/spotify/play",
+  wrap(async (req, res) => {
+    const b = req.body || {};
+    if (b.liked) return res.json(await spotify.playLiked(true));
+    if (typeof b.playlist === "string") return res.json(await spotify.playPlaylist(b.playlist));
+    res.status(400).json({ error: "Rien à lancer." });
   }),
 );
 app.post("/api/spotify/device", (req, res) => {
@@ -300,6 +322,42 @@ app.post("/api/discord/draft/:id/cancel", (req, res) => {
   pendingDiscord.delete(req.params.id);
   res.json({ ok: true });
 });
+
+// ---------- Projets ----------
+app.get("/api/projects", (req, res) => res.json({ projects: projects.listProjects() }));
+app.post("/api/projects", wrap(async (req, res) => res.json(projects.addProject(req.body || {}))));
+app.put("/api/projects/:id", wrap(async (req, res) => res.json(projects.updateProject(req.params.id, req.body || {}))));
+app.delete("/api/projects/:id", (req, res) => {
+  projects.removeProject(req.params.id);
+  res.json({ ok: true });
+});
+app.post("/api/projects/sync", wrap(async (req, res) => res.json(await projects.syncGithub())));
+app.get("/api/projects/status", wrap(async (req, res) => res.json(await projects.siteStatuses())));
+app.post("/api/projects/:id/open-folder", wrap(async (req, res) => res.json(projects.openFolder(req.params.id))));
+
+// ---------- Images créées ----------
+app.get("/api/images", (req, res) => res.json({ images: images.listImages().map((i) => ({ ...i, url: `/api/images/${i.file}` })) }));
+app.get("/api/images/:file", (req, res) => {
+  const p = images.imagePath(req.params.file);
+  if (!p) return res.status(404).json({ error: "Image introuvable" });
+  res.sendFile(p);
+});
+app.post(
+  "/api/images",
+  wrap(async (req, res) => res.json(await images.generateImage(req.body?.prompt, req.body?.format))),
+);
+app.delete("/api/images/:file", (req, res) => {
+  images.deleteImage(req.params.file);
+  res.json({ ok: true });
+});
+
+// ---------- YouTube ----------
+app.get(
+  "/api/youtube/search",
+  wrap(async (req, res) => {
+    res.json({ videos: await searchVideos(String(req.query.q || "")) });
+  }),
+);
 
 // ---------- Onglet Web ----------
 app.get(
