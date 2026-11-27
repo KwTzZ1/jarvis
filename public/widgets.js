@@ -163,6 +163,7 @@ const WIDGET_TYPES = {
   images: { title: "Mes images", icon: "image", size: "m", render: renderImagesWidget },
   system: { title: "Système", icon: "server", size: "s", render: renderSystemWidget },
   notes: { title: "Bloc-notes", icon: "edit", size: "m", render: renderNotesWidget },
+  remote: { title: "Télécommande PC", icon: "zap", size: "m", render: renderRemoteWidget },
 };
 const SIZES = ["s", "m", "t", "l"];
 const SIZE_LABELS = { s: "petit", m: "large", t: "haut", l: "grand" };
@@ -496,6 +497,52 @@ setInterval(() => {
   if (page !== 1 || document.hidden || !document.querySelector('#board .widget-body[data-type="system"]')) return;
   api("/api/system").then((s) => ((systemData = s), renderTypes(["system"])), () => {});
 }, 3000);
+
+// Télécommande : son, lecture, verrouillage, presse-papiers et liens envoyés au PC (pratique depuis le téléphone).
+function renderRemoteWidget(body) {
+  if (body.querySelector(".rmt")) return;
+  const box = el("div", "rmt");
+  const pad = el("div", "rmt-pad");
+  const act = (action) => api(`/api/pc/${action}`, { method: "POST" }).catch((e) => toast(e.message, true));
+  for (const [action, icon, title] of [["volume_down", "volume", "Son −"], ["mute", "volume-x", "Couper le son"], ["volume_up", "volume", "Son +"], ["previous", "prev", "Précédent"], ["play_pause", "play", "Lecture / pause"], ["next", "next", "Suivant"]]) {
+    const b = el("button", "rmt-btn");
+    b.type = "button";
+    b.title = title;
+    b.append(iconEl(icon, 18));
+    if (action === "volume_down" || action === "volume_up") b.append(el("b", null, action === "volume_up" ? "+" : "−"));
+    b.onclick = () => act(action);
+    pad.append(b);
+  }
+  const lock = el("button", "btn ghost rmt-lock");
+  lock.type = "button";
+  lock.append(iconEl("key", 14), document.createTextNode("Verrouiller le PC"));
+  lock.onclick = () => confirm("Verrouiller le PC maintenant ?") && act("lock");
+  const field = el("input");
+  field.placeholder = "Texte ou lien à envoyer au PC…";
+  const row = el("div", "rmt-row");
+  const copy = el("button", "mini-btn", "Copier sur le PC");
+  copy.type = "button";
+  copy.onclick = () => field.value.trim() && api("/api/clipboard", { method: "POST", body: { text: field.value } }).then((r) => toast(r.message), (e) => toast(e.message, true));
+  const open = el("button", "mini-btn", "Ouvrir sur le PC");
+  open.type = "button";
+  open.onclick = () => /^https?:\/\//i.test(field.value.trim()) ? api("/api/open-external", { method: "POST", body: { url: field.value.trim() } }).then(() => toast("Lien ouvert sur le PC."), (e) => toast(e.message, true)) : toast("Colle un lien qui commence par http.", true);
+  const get = el("button", "mini-btn", "Récupérer");
+  get.type = "button";
+  get.title = "Récupérer ce qui est copié sur le PC";
+  get.onclick = () => api("/api/clipboard").then(async (r) => {
+    field.value = r.text || "";
+    if (!r.text) return toast("Presse-papiers du PC vide.");
+    try {
+      await navigator.clipboard.writeText(r.text);
+      toast("Copié ici aussi.");
+    } catch {
+      field.select();
+    }
+  }, (e) => toast(e.message, true));
+  row.append(copy, open, get);
+  box.append(pad, field, row, lock);
+  body.replaceChildren(box);
+}
 
 // Bloc-notes : gardé sur ce PC, enregistré pendant que tu écris.
 function renderNotesWidget(body) {

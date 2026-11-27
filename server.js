@@ -1,5 +1,6 @@
 import { synthesize, piperVoices } from "./lib/tts.js";
-import { systemInfo } from "./lib/system.js";
+import { systemInfo, pcControl, PC_ACTIONS, setClipboard, getClipboard } from "./lib/system.js";
+import { PHONE_PORT, checkToken, phoneInfo, resetPhoneToken, updatePhoneServer } from "./lib/phone.js";
 import "./lib/boot.js";
 import express from "express";
 import * as google from "./lib/google.js";
@@ -26,7 +27,24 @@ app.disable("x-powered-by");
 // Le serveur n'écoute que sur ta machine. En plus, on refuse toute requête dont l'adresse
 // n'est pas la nôtre : un site web malveillant ne peut pas s'en servir pour lire tes mails.
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
+// Accès téléphone (port à part, réseau local) : il faut la clé secrète, reçue via le QR code.
+const PHONE_BLOCKED = /^\/(api\/settings|api\/phone|auth\/)/;
 app.use((req, res, next) => {
+  if (req.socket.localPort !== PHONE_PORT) return next();
+  const cookie = /(?:^|;\s*)jarvis_k=([a-f0-9]+)/.exec(req.headers.cookie || "")?.[1];
+  if (req.query.k && checkToken(req.query.k)) {
+    res.setHeader("Set-Cookie", `jarvis_k=${req.query.k}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000`);
+    return res.redirect("/");
+  }
+  if (!checkToken(cookie)) return res.status(401).send("<meta name=viewport content='width=device-width'><body style='background:#01050b;color:#9ddcff;font-family:sans-serif;padding:30px'><h2>Jarvis</h2><p>Accès refusé. Sur le PC : Réglages &gt; Téléphone, puis scanne le QR code.</p>");
+  if (PHONE_BLOCKED.test(req.path)) return res.status(403).json({ error: "Réservé au PC." });
+  const origin = req.headers.origin;
+  if (req.method !== "GET" && req.method !== "HEAD" && origin && origin !== `http://${req.headers.host}`) return res.status(403).json({ error: "Origine refusée" });
+  req.fromPhone = true;
+  next();
+});
+app.use((req, res, next) => {
+  if (req.fromPhone) return next();
   if (!ALLOWED_HOSTS.has(String(req.headers.host || "").toLowerCase())) return res.status(403).send("Accès refusé");
   // Les requêtes qui modifient quelque chose doivent venir de la page elle-même.
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -83,6 +101,17 @@ function status() {
 app.get("/api/status", (req, res) => res.json(status()));
 
 app.get("/api/system", wrap(async (req, res) => res.json(await systemInfo())));
+app.post(
+  "/api/pc/:action",
+  wrap(async (req, res) => {
+    if (!PC_ACTIONS.includes(req.params.action)) return res.status(400).json({ error: "Action inconnue." });
+    res.json({ message: await pcControl(req.params.action) });
+  }),
+);
+app.get("/api/clipboard", wrap(async (req, res) => res.json({ text: await getClipboard() })));
+app.post("/api/clipboard", wrap(async (req, res) => res.json({ message: await setClipboard(req.body?.text) })));
+app.get("/api/phone", wrap(async (req, res) => res.json(await phoneInfo())));
+app.post("/api/phone/reset", (req, res) => (resetPhoneToken(), res.json({ ok: true })));
 
 // Voix naturelle (Piper, sur le PC).
 app.post(
@@ -116,6 +145,7 @@ app.post(
     let disc = null;
     if (changed.includes("DISCORD_BOT_TOKEN") || values.DISCORD_BOT_TOKEN) checks.push(discord.checkDiscord().then((r) => (disc = r)));
     await Promise.all(checks);
+    if (changed.includes("PHONE_ACCESS")) updatePhoneServer(app);
     res.json({ ok: true, changed, ai, free, discord: disc, status: status() });
   }),
 );
@@ -444,6 +474,7 @@ app
   .listen(PORT, "127.0.0.1", () => {
     const name = process.env.ASSISTANT_NAME || "Jarvis";
     console.log(`\n  ${name} est en ligne : ${APP_URL}\n`);
+    updatePhoneServer(app);
     if (!aiConfigured()) console.log("  [!] Pas de clé API Claude : renseigne-la dans les réglages.");
     else checkAi().then((r) => !r.ok && console.log("  [!] " + r.message));
     if (groqConfigured()) checkGroq().then((r) => !r.ok && console.log("  [!] " + r.message));

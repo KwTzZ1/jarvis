@@ -1409,6 +1409,38 @@ const SECTIONS = {
   },
 };
 
+// Sous le réglage "Téléphone" : le QR code à scanner (seulement sur le PC).
+async function phoneQr(content) {
+  const sec = content.querySelector("#sec_Tlphone");
+  if (!sec || location.port !== String(state.status?.port || location.port)) return;
+  let info;
+  try {
+    info = await api("/api/phone");
+  } catch {
+    return;
+  }
+  const box = el("div", "phone-box");
+  if (!info.enabled) box.append(el("div", "hint", "Active l'accès puis enregistre : le QR code apparaîtra ici."));
+  else if (!info.url) box.append(el("div", "hint", "Aucun réseau Wi-Fi trouvé sur ce PC."));
+  else {
+    const qr = el("div", "phone-qr");
+    qr.innerHTML = info.qr;
+    const txt = el("div", "phone-txt");
+    txt.append(
+      el("div", null, "1. Ton téléphone sur le même Wi-Fi que le PC."),
+      el("div", null, "2. Scanne ce QR code avec l'appareil photo."),
+      el("div", null, "3. Ajoute la page à l'écran d'accueil pour l'avoir comme une appli."),
+      el("div", "hint", "Si Windows demande d'autoriser Node.js sur le réseau, accepte pour les réseaux privés. Le micro ne marche pas sur téléphone (le navigateur l'interdit sans HTTPS) : écris tes demandes."),
+    );
+    const reset = el("button", "mini-btn", "Changer le code (déconnecte les téléphones)");
+    reset.type = "button";
+    reset.onclick = () => api("/api/phone/reset", { method: "POST" }).then(() => (box.remove(), phoneQr(content)));
+    txt.append(reset);
+    box.append(qr, txt);
+  }
+  sec.append(box);
+}
+
 // Section "Voix" : choix parmi les voix disponibles, vitesse, ton, et bouton Tester.
 function voiceSection(nav) {
   const sec = el("section", "set-section");
@@ -1620,6 +1652,7 @@ async function openSettings(focusSection) {
     content.append(sec);
   }
   content.append(voiceSection(nav));
+  phoneQr(content);
   $("#settings").hidden = false;
   const target = focusSection && [...content.querySelectorAll(".set-section")].find((x) => x.id.includes(focusSection));
   if (target) target.scrollIntoView({ block: "start" });

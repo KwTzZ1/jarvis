@@ -241,6 +241,22 @@ Jarvis consomme peu quand il ne sert pas :
 
 ---
 
+## Sur ton téléphone
+
+1. Réglages → **Téléphone** → « Activé (même Wi-Fi) » → Enregistrer.
+2. Rouvre les réglages : un **QR code** apparaît. Scanne-le avec l'appareil photo du téléphone (même Wi-Fi que le PC).
+3. Dans le navigateur du téléphone : « Ajouter à l'écran d'accueil » pour l'avoir comme une appli.
+
+- La première fois, Windows peut demander d'autoriser Node.js : accepte pour les **réseaux privés**.
+- L'accès est protégé par un code secret contenu dans le QR code. « Changer le code » déconnecte tous les téléphones.
+- Depuis le téléphone, les réglages sont bloqués. Le micro ne marche pas (le navigateur l'interdit sans HTTPS) : écris tes demandes.
+
+## Télécommande du PC
+
+- Widget **Télécommande PC** (idéal depuis le téléphone) : son −/muet/+, précédent/lecture/suivant (marche avec YouTube, Netflix, Spotify…), verrouiller le PC.
+- **Envoyer au PC** : colle un texte ou un lien, puis « Copier sur le PC » (presse-papiers) ou « Ouvrir sur le PC ». « Récupérer » rapatrie ce qui est copié sur le PC.
+- À la voix ou par écrit : « baisse le son », « mets pause », « verrouille le PC », « copie ce lien sur le PC : … », « qu'est-ce que j'ai copié ? ».
+
 ## Sécurité
 
 - Tout tourne sur ton PC. Le serveur n'écoute que ta machine (127.0.0.1).

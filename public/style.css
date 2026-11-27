@@ -805,3 +805,44 @@ body.orb-mini .orb .reactor:hover { filter: brightness(1.4) drop-shadow(0 0 18px
 body.orb-mini .orb .hr2 { display: none; }
 body[data-page]:not([data-page="0"]) .orb .hr { animation-play-state: running; }
 .modal-bg, .viewer, .boot, .palette-bg, .toast { z-index: 1000; }
+
+/* ----- Télécommande PC ----- */
+.rmt { display: flex; flex-direction: column; gap: 10px; }
+.rmt-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.rmt-btn { position: relative; display: grid; place-items: center; height: 46px; border: 1px solid var(--line-strong); background: rgba(46, 197, 255, .06); color: var(--cyan-soft); clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+.rmt-btn:active { background: rgba(46, 197, 255, .3); }
+.rmt-btn b { position: absolute; right: 10px; top: 6px; font-size: 14px; color: var(--cyan); }
+.rmt-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.rmt-lock { align-self: flex-start; }
+/* ----- QR code téléphone ----- */
+.phone-box { display: flex; gap: 18px; align-items: flex-start; margin-top: 12px; flex-wrap: wrap; }
+.phone-qr { width: 190px; padding: 10px; border: 1px solid var(--line-strong); background: rgba(46, 197, 255, .05); }
+.phone-qr svg { display: block; width: 100%; height: auto; }
+.phone-txt { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.phone-txt .mini-btn { align-self: flex-start; margin-top: 6px; }
+
+/* ----- Téléphone : une seule colonne, onglets en bas, gros boutons ----- */
+@media (max-width: 760px) {
+  body { font-size: 16px; overflow: hidden; }
+  .scanlines, .grid-bg { display: none; }
+  .topbar { padding: 8px 12px; }
+  .clock, .kbd-hint, .cost, #wakeToggle { display: none !important; }
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; justify-content: space-around; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: rgba(2, 8, 16, .97); border-top: 1px solid var(--line-strong) !important; }
+  .tab { flex: 1; flex-direction: column; gap: 3px; padding: 6px 2px; font-size: 10px; clip-path: none; border: none !important; justify-content: center; }
+  .pager { height: calc(100dvh - 52px - 58px) !important; }
+  .page { height: 100% !important; overflow-y: auto; }
+  .layout { display: flex; flex-direction: column; padding: 10px; height: auto; }
+  #pageAssistant .col { display: none; }
+  .center { min-height: calc(100dvh - 130px); order: 0; }
+  .core-wrap { width: 150px; }
+  #bigTime { font-size: 30px; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; width: 100%; padding-bottom: 4px; }
+  .chip { flex-shrink: 0; }
+  .composer { position: sticky; bottom: 0; }
+  .composer input { font-size: 16px; }
+  .board { grid-template-columns: 1fr !important; }
+  .widget { grid-column: auto !important; grid-row: auto !important; }
+  body.orb-mini .orb { display: none; }
+  .modal, .settings-modal { width: 100vw !important; max-height: 100dvh !important; }
+}
+@media (max-width: 760px) { .toast { bottom: 140px; width: max-content; max-width: 92vw; } }
