@@ -60,6 +60,7 @@ function goTo(p, animate = true) {
   });
   // La page cachée ne doit pas prendre le focus clavier.
   PAGE_IDS.forEach((id, i) => ($("#" + id).inert = page !== i));
+  document.body.dataset.page = String(page);
   localStorage.setItem("page", String(page));
   if (page !== 1) closeAddMenu();
 }
@@ -76,7 +77,7 @@ let swipe = null;
 const SWIPE_BACKGROUNDS = ".page, .layout, .col, .center, .chat, .board, .board-page, .board-toolbar, .track, .chips, .web-tabs, .projects-page, .projects";
 pager.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" && e.button !== 0) return;
-  if (e.target.closest("input, textarea, select, button, a, label, .add-menu, .msg, .draft")) return;
+  if (e.target.closest("input, textarea, select, button, a, label, .add-menu, .msg, .draft, .widget-head, .rs-handle")) return;
   if (boardEditing && e.target.closest(".widget")) return; // en mode Modifier, on déplace les widgets
   if (e.pointerType === "mouse" && !e.target.matches(SWIPE_BACKGROUNDS)) return; // garder la sélection de texte
   swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, active: false };
@@ -150,9 +151,9 @@ const WIDGET_TYPES = {
   clock: { title: "Horloge", icon: "clock", size: "s", render: renderClockWidget },
   ask: { title: "Demande à Jarvis", icon: "message", size: "m", render: renderAskWidget },
   weather: { title: "Météo", icon: "cloud-sun", size: "m", render: (b) => renderWeatherInto(b, cache.dashboard?.weather) },
-  music: { title: "Spotify", icon: "music", size: "m", render: (b) => renderMusicInto(b, cache.music) },
+  music: { title: "Spotify", icon: "music", size: "l", render: renderSpotifyWidget },
   agenda: { title: "Agenda", icon: "calendar", size: "t", render: (b) => renderListWidget(b, "events") },
-  mails: { title: "Mails non lus", icon: "mail", size: "t", render: (b) => renderListWidget(b, "emails") },
+  mails: { title: "Mails non lus", icon: "mail", size: "t", render: renderMailWidget },
   tasks: { title: "Tâches", icon: "tasks", size: "t", render: (b) => renderListWidget(b, "tasks") },
   timers: { title: "Minuteurs", icon: "timer", size: "s", render: renderTimersWidget },
   memory: { title: "Mémoire", icon: "bookmark", size: "s", render: renderMemoryWidget },
@@ -202,6 +203,89 @@ function renderListWidget(body, kind) {
   }
   renderListInto(ul, kind);
 }
+
+// Spotify : ce qui joue + tes playlists en vignettes cliquables (mises à jour en direct).
+function renderSpotifyWidget(body) {
+  let now = body.querySelector(".spw-now");
+  let grid = body.querySelector(".spw-grid");
+  if (!now) {
+    now = el("div", "spw-now");
+    grid = el("div", "spw-grid");
+    body.replaceChildren(now, el("div", "spw-label", "Tes playlists"), grid);
+    body.classList.add("spw");
+  }
+  renderMusicInto(now, cache.music);
+  now.querySelector(".sp-lib")?.remove(); // le menu déroulant est remplacé par les vignettes
+  const sp = state.status?.spotify;
+  if (!sp?.connected) return grid.replaceChildren();
+  if (!sp.scopesOk) return grid.replaceChildren(el("div", "muted", "Reconnecte Spotify pour voir tes playlists."));
+  if (!spotifyLib.playlists) {
+    loadPlaylists(); // préviendra les widgets une fois chargé (pas de boucle)
+    return grid.replaceChildren(el("div", "muted", "Chargement…"));
+  }
+  if (grid.dataset.count === String(spotifyLib.playlists.length)) return;
+  grid.dataset.count = String(spotifyLib.playlists.length);
+  const liked = el("button", "spw-card liked");
+  liked.type = "button";
+  liked.title = "Titres likés";
+  const lc = el("div", "spw-cover");
+  lc.append(iconEl("heart", 26));
+  liked.append(lc, el("span", null, "Titres likés"));
+  liked.onclick = () => api("/api/spotify/play", { method: "POST", body: { liked: true } }).then(() => setTimeout(refreshMusic, 800), (e) => toast(e.message, true));
+  grid.replaceChildren(liked);
+  for (const p of spotifyLib.playlists) {
+    const c = el("button", "spw-card");
+    c.type = "button";
+    c.title = `${p.name}${p.tracks != null ? ` · ${p.tracks} titres` : ""}`;
+    const cover = el("div", "spw-cover");
+    if (p.image) {
+      const img = el("img");
+      img.src = p.image;
+      img.alt = "";
+      img.loading = "lazy";
+      cover.append(img);
+    } else cover.append(iconEl("music", 22));
+    c.append(cover, el("span", null, p.name));
+    c.onclick = () => {
+      c.classList.add("starting");
+      api("/api/spotify/play", { method: "POST", body: { playlist: p.name } }).then(
+        () => (toast(`Lecture : ${p.name}`), setTimeout(refreshMusic, 800)),
+        (e) => toast(e.message, true),
+      ).finally(() => c.classList.remove("starting"));
+    };
+    grid.append(c);
+  }
+}
+
+// Mails : expéditeur, objet, aperçu et heure ; clic = résumé par Jarvis.
+function renderMailWidget(body) {
+  const r = cache.dashboard?.emails;
+  let ul = body.querySelector("ul");
+  if (!ul) {
+    ul = el("ul", "list mail-list");
+    body.replaceChildren(ul);
+  }
+  ul.replaceChildren();
+  if (!r) return ul.append(emptyLi("Chargement…"));
+  if (r.error === "not_connected") return ul.append(emptyLi("Connecte Google pour voir tes mails."));
+  if (r.error) return ul.append(emptyLi(r.error));
+  if (!r.data.length) return ul.append(emptyLi("Boîte de réception à jour."));
+  for (const m of r.data) {
+    const li = el("li", "clickable mail-item");
+    const d = new Date(m.date);
+    const when = isNaN(d) ? "" : d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    const top = el("div", "mail-top");
+    top.append(el("span", "t", senderName(m.from)), el("span", "when", when));
+    li.append(top, el("div", "mail-subject", m.subject), el("div", "s", m.snippet));
+    li.title = "Clique pour que Jarvis le résume";
+    li.onclick = () => (goTo(0), send(`Résume-moi le mail de ${senderName(m.from)} intitulé "${m.subject}" (id ${m.id}).`));
+    ul.append(li);
+  }
+}
+// Mails et agenda rafraîchis toutes les minutes quand la page Widgets est ouverte.
+setInterval(() => {
+  if (page === 1 && document.visibilityState === "visible") refreshAll();
+}, 60_000);
 
 function renderMemoryWidget(body) {
   let ul = body.querySelector("ul");
@@ -346,7 +430,7 @@ hooks.discord.push(() => loadDiscord(true));
 // Rafraîchit les messages toutes les 20 s, seulement si un widget Discord est visible.
 setInterval(() => {
   if (page === 1 && document.visibilityState === "visible" && document.querySelector('#board .widget-body[data-type="discord"]')) loadDiscord();
-}, 20_000);
+}, 5_000);
 hooks.status.push(() => {
   const d = state.status?.discord;
   if (d?.ok && !discordState.channels && !discordState.loading) loadDiscord();
@@ -436,10 +520,21 @@ function renderDiscordWidget(body) {
   else if (!discordState.messages.length) list.append(emptyLi("Aucun message récent."));
   for (const m of discordState.messages) {
     const li = el("li");
-    const head = el("div", "when", `${m.author}${m.bot ? " (bot)" : ""} · ${new Date(m.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`);
-    li.append(head, el("div", "dc-text", m.content || "(vide)"));
+    li.className = "dc-msg" + (discordState.seen && !discordState.seen.has(m.id) ? " fresh" : "");
+    const av = el("div", "dc-avatar");
+    if (m.avatar) {
+      const img = el("img");
+      img.src = m.avatar;
+      img.alt = "";
+      img.loading = "lazy";
+      av.append(img);
+    } else av.textContent = m.author.slice(0, 1).toUpperCase();
+    const txt = el("div", "dc-body");
+    txt.append(el("div", "when", `${m.author}${m.bot ? " (bot)" : ""} · ${new Date(m.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`), el("div", "dc-text", m.content || "(vide)"));
+    li.append(av, txt);
     list.append(li);
   }
+  discordState.seen = new Set(discordState.messages.map((m) => m.id));
   if (atBottom || !list.dataset.seen) list.scrollTop = list.scrollHeight;
   list.dataset.seen = "1";
 }
@@ -528,7 +623,9 @@ function slotElement(slot) {
 
   const body = el("div", "widget-body");
   body.dataset.type = type;
-  w.append(head, body);
+  const handle = el("div", "rs-handle");
+  handle.title = "Tirer pour changer la taille";
+  w.append(head, body, handle);
   return w;
 }
 
@@ -616,10 +713,100 @@ document.addEventListener("keydown", (e) => e.key === "Escape" && closeAddMenu()
 
 // ---------- Déplacer / empiler (souris et doigt) ----------
 let drag = null;
+// Taille à partir d'un nombre de colonnes / lignes (1 ou 2).
+const sizeFor = (cols, rows) => (cols > 1 ? (rows > 1 ? "l" : "m") : rows > 1 ? "t" : "s");
+const dims = { s: [1, 1], m: [2, 1], t: [1, 2], l: [2, 2] };
+function setSlotSize(id, size) {
+  const slot = slots.find((s) => s.id === id);
+  if (!slot || slot.size === size) return;
+  slot.size = size;
+  saveBoard();
+}
+
+// Redimensionner : on tire la poignée en bas à droite.
+let resize = null;
 $("#board").addEventListener("pointerdown", (e) => {
-  if (!boardEditing || (e.pointerType === "mouse" && e.button !== 0)) return;
+  const handle = e.target.closest(".rs-handle");
+  if (!handle) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const w = handle.closest(".widget");
+  const slot = slots.find((s) => s.id === w.dataset.id);
+  const r = w.getBoundingClientRect();
+  const [c, rw] = dims[slot.size];
+  resize = { w, slot, x: e.clientX, y: e.clientY, cellW: r.width / c, cellH: r.height / rw, startW: r.width, startH: r.height, pointerId: e.pointerId };
+  handle.setPointerCapture(e.pointerId);
+  w.classList.add("resizing");
+}, true);
+$("#board").addEventListener("pointermove", (e) => {
+  if (!resize || e.pointerId !== resize.pointerId) return;
+  const cols = resize.startW + (e.clientX - resize.x) > resize.cellW * 1.5 ? 2 : 1;
+  const rows = resize.startH + (e.clientY - resize.y) > resize.cellH * 1.5 ? 2 : 1;
+  const size = sizeFor(cols, rows);
+  resize.w.className = resize.w.className.replace(/size-\w/, "size-" + size);
+  resize.size = size;
+});
+const endResize = (e) => {
+  if (!resize || e.pointerId !== resize.pointerId) return;
+  const { slot, size } = resize;
+  resize = null;
+  if (size) setSlotSize(slot.id, size);
+  renderBoard();
+};
+$("#board").addEventListener("pointerup", endResize);
+$("#board").addEventListener("pointercancel", endResize);
+
+// Pincer (pavé tactile : Ctrl + molette, ce que fait le pincement) pour agrandir / réduire.
+const GROW = { s: "m", m: "l", t: "l", l: "l" };
+const SHRINK = { l: "m", m: "s", t: "s", s: "s" };
+let pinchSum = 0;
+let pinchLock = 0;
+$("#board").addEventListener(
+  "wheel",
+  (e) => {
+    if (!e.ctrlKey) return;
+    const w = e.target.closest(".widget");
+    if (!w) return;
+    e.preventDefault();
+    if (Date.now() < pinchLock) return;
+    pinchSum += e.deltaY;
+    if (Math.abs(pinchSum) < 30) return;
+    const slot = slots.find((s) => s.id === w.dataset.id);
+    setSlotSize(slot.id, (pinchSum < 0 ? GROW : SHRINK)[slot.size]);
+    pinchSum = 0;
+    pinchLock = Date.now() + 350;
+    renderBoard();
+  },
+  { passive: false },
+);
+// Pincer à deux doigts sur un écran tactile.
+let touchPinch = null;
+$("#board").addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 2) return;
+  const w = e.touches[0].target.closest?.(".widget");
+  if (!w || w !== e.touches[1].target.closest?.(".widget")) return;
+  const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  touchPinch = { id: w.dataset.id, dist };
+}, { passive: true });
+$("#board").addEventListener("touchmove", (e) => {
+  if (!touchPinch || e.touches.length !== 2) return;
+  const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  const ratio = dist / touchPinch.dist;
+  if (ratio > 1.25 || ratio < 0.8) {
+    const slot = slots.find((s) => s.id === touchPinch.id);
+    setSlotSize(slot.id, (ratio > 1 ? GROW : SHRINK)[slot.size]);
+    touchPinch.dist = dist;
+    renderBoard();
+  }
+}, { passive: true });
+$("#board").addEventListener("touchend", () => (touchPinch = null));
+
+// Déplacer : on attrape un widget par son en-tête (ou n'importe où en mode Modifier).
+$("#board").addEventListener("pointerdown", (e) => {
+  if (resize || (e.pointerType === "mouse" && e.button !== 0)) return;
   const w = e.target.closest(".widget");
-  if (!w || e.target.closest("button, input, a")) return;
+  if (!w || e.target.closest("button, input, a, select, textarea, .rs-handle")) return;
+  if (!boardEditing && !e.target.closest(".widget-head")) return;
   e.preventDefault();
   drag = { id: w.dataset.id, el: w, x: e.clientX, y: e.clientY, moved: false, target: null, zone: null, pointerId: e.pointerId };
   w.setPointerCapture(e.pointerId);

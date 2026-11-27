@@ -253,8 +253,15 @@ function step(delta) {
 
 function selectTab(id) {
   web.current = id;
+  // Économie : les autres onglets sont mis en veille (vidés), ils se rechargent quand on revient dessus.
+  for (const t of web.tabs) {
+    if (t.id !== id && t.view) {
+      t.view.remove();
+      t.view = null;
+    }
+  }
   const tab = currentTab();
-  if (!tab.view) showUrl(tab, tab.url); // onglet restauré : on le charge au premier affichage
+  if (!tab.view) showUrl(tab, tab.url); // onglet en veille ou restauré : on le recharge
   saveWebTabs();
   renderWebTabs();
 }

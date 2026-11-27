@@ -159,6 +159,10 @@ Troisième page : barre d'adresse, plusieurs onglets, précédent, suivant, rech
   - c'est gratuit et sans compte, via Pollinations ;
   - limites : une image toutes les 45 secondes, petit logo en bas à droite, et une image est visible par toute personne qui a son lien ;
   - les images sont gardées dans `data/images` et dans le widget « Mes images ».
+- **Trouver une vraie photo :**
+  - dis « montre-moi Werenoi », « à quoi ressemble la tour Eiffel » ;
+  - Jarvis cherche sur Wikipédia, Openverse (photos libres) et Spotify pour les artistes, puis affiche une petite galerie ; clique une photo pour ouvrir sa source.
+- Les images jointes sont envoyées en meilleure qualité (jusqu'à 2000 px) pour que Jarvis puisse lire les captures d'écran ; s'il ne peut pas lire un texte, il le dit au lieu d'inventer.
 
 ## 8. Onglet Projets
 
@@ -199,6 +203,26 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
   - lâche-le **au centre d'un autre** pour les **empiler** (les flèches du widget passent de l'un à l'autre) ;
   - icônes en haut à droite : taille (petit, large, haut, grand), défaire la pile, supprimer.
 - La disposition est gardée sur ce PC. « Disposition par défaut » remet tout comme au début.
+- **Sans passer par Modifier** :
+  - attrape un widget par son titre pour le déplacer ;
+  - tire le coin en bas à droite pour changer sa taille ;
+  - **pince** (deux doigts sur écran tactile) ou **Ctrl + molette** sur un widget pour l'agrandir ou le réduire.
+- **En direct** :
+  - Spotify : titre en cours, pochettes de tes playlists et titres likés, un clic pour lancer ;
+  - Discord : messages du salon mis à jour toutes les 5 secondes, avec avatars ; les nouveaux s'allument ;
+  - Mails : expéditeur, heure, objet et début du message ;
+  - le reste se met à jour toutes les minutes tant que la page Widgets est ouverte.
+
+## Voix
+
+Réglages → **Voix** : choisis la voix, la vitesse et la hauteur (plus grave = plus « majordome »), puis « Tester ».
+
+## Performances
+
+Jarvis consomme peu quand il ne sert pas :
+- pas d'effet de flou en arrière-plan (très coûteux pour la carte graphique) ;
+- les pages qui ne sont pas à l'écran ne sont pas dessinées, et les animations s'arrêtent sur les autres pages et quand la fenêtre est réduite ;
+- dans l'onglet Web, un seul site est actif à la fois : les autres onglets se rechargent quand on revient dessus.
 
 **Raccourcis :**
 - maintiens **Espace**, ou clique sur le réacteur, pour parler ;

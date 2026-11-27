@@ -393,7 +393,7 @@ async function refreshAll() {
 // Menu "Mes playlists" + "Titres likés", gardé entre deux rafraîchissements (le menu ne se ferme pas tout seul).
 const spotifyLib = { playlists: null, loading: false };
 async function loadPlaylists() {
-  if (spotifyLib.loading || spotifyLib.playlists) return;
+  if (spotifyLib.playlists || spotifyLib.loading) return;
   spotifyLib.loading = true;
   try {
     spotifyLib.playlists = (await api("/api/spotify/playlists")).playlists;
@@ -403,6 +403,7 @@ async function loadPlaylists() {
   } finally {
     spotifyLib.loading = false;
   }
+  if (spotifyLib.playlists) emit("music"); // les widgets se redessinent une fois, avec les playlists
 }
 function fillPlaylistSelect(lib) {
   const sel = lib.querySelector("select");
@@ -554,7 +555,7 @@ const MAX_ATTACH = 3;
 // Réduit l'image (1280 px max) pour un envoi rapide et peu coûteux.
 async function shrinkImage(file) {
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height)); // assez grand pour lire une capture d'écran
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
@@ -563,7 +564,7 @@ async function shrinkImage(file) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close?.();
-  return canvas.toDataURL("image/jpeg", 0.85);
+  return canvas.toDataURL("image/jpeg", 0.9);
 }
 
 async function addAttachments(files) {
@@ -756,6 +757,9 @@ function handleAction(a) {
     case "discord_draft":
       showDiscordDraft(a);
       break;
+    case "images":
+      showFoundImages(a);
+      break;
     case "image":
       showGeneratedImage(a);
       emit("images");
@@ -800,6 +804,31 @@ function showDraft(a) {
     state.history.push({ role: "assistant", content: "Mail annulé." });
   };
   $("#chat").append(node);
+  scrollChat();
+}
+
+// Photos trouvées sur internet : petite galerie dans le chat.
+function showFoundImages(a) {
+  const card = el("div", "msg bot found-images");
+  card.dataset.name = state.name.toUpperCase() + " · IMAGES";
+  const grid = el("div", "found-grid");
+  for (const it of a.items) {
+    const fig = el("button", "found-item");
+    fig.type = "button";
+    fig.title = `${it.title} — ${it.source}`;
+    const img = el("img");
+    img.src = it.url;
+    img.alt = it.title;
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.onerror = () => fig.remove();
+    img.onload = scrollChat;
+    fig.append(img, el("span", null, it.source));
+    fig.onclick = () => openExternal(it.link || it.url);
+    grid.append(fig);
+  }
+  card.append(grid);
+  $("#chat").append(card);
   scrollChat();
 }
 
@@ -940,8 +969,14 @@ const beepShort = () => tone(1200, [0], 0.15, 0.15);
 
 // ---------- Voix : synthèse ----------
 let frVoice = null;
+// Réglages de voix (gardés sur ce PC) : voix choisie, vitesse, ton (grave = plus "majordome").
+const voicePrefs = Object.assign({ name: "", rate: 1, pitch: 0.85 }, JSON.parse(localStorage.getItem("voicePrefs") || "{}"));
+const saveVoicePrefs = () => localStorage.setItem("voicePrefs", JSON.stringify(voicePrefs));
 function pickVoice() {
-  const voices = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("fr"));
+  const all = speechSynthesis.getVoices();
+  const chosen = voicePrefs.name && all.find((v) => v.name === voicePrefs.name);
+  if (chosen) return (frVoice = chosen);
+  const voices = all.filter((v) => v.lang.toLowerCase().startsWith("fr"));
   // Préférence pour les voix "naturelles" quand elles existent.
   frVoice =
     voices.find((v) => /natural|online/i.test(v.name) && /henri|paul|remy|male|homme/i.test(v.name)) ||
@@ -987,7 +1022,8 @@ function speak(text, force = false) {
       const u = new SpeechSynthesisUtterance(p.trim());
       u.lang = "fr-FR";
       if (frVoice) u.voice = frVoice;
-      u.rate = 1.05;
+      u.rate = voicePrefs.rate;
+      u.pitch = voicePrefs.pitch;
       if (i === parts.length - 1) u.onend = done;
       u.onerror = (e) => e.error !== "interrupted" && e.error !== "canceled" && done();
       speechSynthesis.speak(u);
@@ -1257,6 +1293,71 @@ const SECTIONS = {
   },
 };
 
+// Section "Voix" : choix parmi les voix disponibles, vitesse, ton, et bouton Tester.
+function voiceSection(nav) {
+  const sec = el("section", "set-section");
+  sec.id = "sec_Voix";
+  const head = el("div", "set-head");
+  const ic = el("div", "set-icon");
+  ic.append(iconEl("volume", 20));
+  const titles = el("div", "set-titles");
+  titles.append(el("h4", null, "Voix de Jarvis"), el("p", null, "Choisis sa voix, sa vitesse et son ton. Astuce majordome : voix d'homme, un peu plus lente et plus grave."));
+  head.append(ic, titles);
+  sec.append(head);
+  const voices = speechSynthesis.getVoices().sort((a, b) => (b.lang.startsWith("fr") - a.lang.startsWith("fr")) || a.name.localeCompare(b.name));
+  const row = (label, control) => {
+    const r = el("div", "field");
+    r.append(el("label", null, label), control);
+    sec.append(r);
+  };
+  const sel = el("select");
+  const auto = el("option", null, "Automatique (meilleure voix française)");
+  auto.value = "";
+  sel.append(auto);
+  for (const v of voices) {
+    const o = el("option", null, `${v.name.replace(/^Microsoft |^Google /, "")} (${v.lang})`);
+    o.value = v.name;
+    sel.append(o);
+  }
+  sel.value = voicePrefs.name;
+  sel.onchange = () => {
+    voicePrefs.name = sel.value;
+    saveVoicePrefs();
+    pickVoice();
+  };
+  row("Voix", sel);
+  const slider = (key, min, max, step, fmt) => {
+    const wrap = el("div", "field-input");
+    const input = el("input");
+    input.type = "range";
+    input.min = min;
+    input.max = max;
+    input.step = step;
+    input.value = voicePrefs[key];
+    const val = el("span", "range-val", fmt(voicePrefs[key]));
+    input.oninput = () => {
+      voicePrefs[key] = Number(input.value);
+      val.textContent = fmt(voicePrefs[key]);
+      saveVoicePrefs();
+    };
+    wrap.append(input, val);
+    return wrap;
+  };
+  row("Vitesse", slider("rate", 0.7, 1.4, 0.05, (v) => `${Math.round(v * 100)} %`));
+  row("Ton", slider("pitch", 0.5, 1.5, 0.05, (v) => (v < 0.95 ? "grave" : v > 1.05 ? "aigu" : "normal") + ` (${v.toFixed(2)})`));
+  const test = el("button", "proj-link set-link");
+  test.type = "button";
+  test.append(iconEl("volume", 14), document.createTextNode("Tester la voix"));
+  test.onclick = () => speak(`Bonsoir${state.status?.userName ? " " + state.status.userName : ""}. Tous les systèmes sont opérationnels. Que puis-je faire pour vous ?`, true);
+  sec.append(test);
+  const navBtn = el("button", "set-nav-item");
+  navBtn.type = "button";
+  navBtn.append(iconEl("volume", 16), el("span", null, "Voix"));
+  navBtn.onclick = () => sec.scrollIntoView({ behavior: "smooth", block: "start" });
+  nav.append(navBtn);
+  return sec;
+}
+
 async function openSettings(focusSection) {
   let fields;
   try {
@@ -1364,6 +1465,7 @@ async function openSettings(focusSection) {
     }
     content.append(sec);
   }
+  content.append(voiceSection(nav));
   $("#settings").hidden = false;
   const target = focusSection && [...content.querySelectorAll(".set-section")].find((x) => x.id.includes(focusSection));
   if (target) target.scrollIntoView({ block: "start" });
@@ -1442,6 +1544,8 @@ $("#composer").addEventListener("submit", (e) => {
 });
 document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => send(c.dataset.prompt)));
 document.querySelector("[data-refresh]").addEventListener("click", refreshAll);
+// Fenêtre réduite / cachée : on met les animations en pause (économie de processeur).
+document.addEventListener("visibilitychange", () => document.body.classList.toggle("asleep", document.visibilityState !== "visible"));
 // En revenant sur la fenêtre, on remet les infos à jour.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
