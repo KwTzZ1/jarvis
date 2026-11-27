@@ -240,6 +240,7 @@ Le bouton **Style Jarvis** règle tout en un clic (voix masculine, grave et pos�
 **Voix naturelle (Piper)** : si Piper est installé dans `%LOCALAPPDATA%\Jarvis\piper` (avec ses voix dans `voices/`), Jarvis parle avec une voix naturelle générée sur ton PC, sans internet. Choix du « Moteur » dans Réglages → Voix (Tom = homme, UPMC = autre voix), ou retour à la voix du navigateur.
 
 **Micro** : Réglages → **Micro**. Le bouton « Autoriser le micro » fait demander l'autorisation par la fenêtre (une seule fois), puis « Tester le micro » affiche une barre qui suit ta voix. Si le micro est bloqué, deux boutons ouvrent l'autorisation de la fenêtre Jarvis (Micro → Autoriser) et les réglages Windows du micro.
+Juste en dessous : **Micro (entrée)** pour choisir le micro qui t'écoute, **Sortie audio** pour choisir où Jarvis parle (haut-parleurs, casque…) et **Volume de la voix**, avec « Tester la sortie ». La sortie choisie vaut pour la voix naturelle (Piper) et les sons de l'interface ; la voix du navigateur passe toujours par la sortie de Windows. Les listes se mettent à jour quand tu branches ou débranches un casque.
 
 **Images dans le chat** : clique sur une image (envoyée ou reçue) pour l'afficher en grand ; flèches pour passer de l'une à l'autre, Échap pour fermer.
 

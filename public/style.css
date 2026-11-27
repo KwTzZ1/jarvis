@@ -1176,3 +1176,8 @@ body.orb-mini .core-readout, body.convo .core-readout { opacity: 0 !important; }
 .mic-fix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 .mic-fix[hidden] { display: none; }
 .mic-fix p { flex-basis: 100%; margin: 0; }
+.mic-devices { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.mic-volrow { display: flex; align-items: center; gap: 12px; }
+.mic-volrow input { flex: 1; accent-color: var(--cyan); height: auto; padding: 0; border: none; background: none; }
+.mic-vol { min-width: 46px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mic-devices .help[hidden] { display: none; }

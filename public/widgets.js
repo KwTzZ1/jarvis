@@ -14,7 +14,7 @@ track.style.setProperty("--pages", PAGE_IDS.length);
 function switchSound(direction) {
   if (state.status && state.status.uiSounds === false) return;
   try {
-    const ctx = (switchSound.ctx ||= new AudioContext());
+    const ctx = (switchSound.ctx ||= routeAudio(new AudioContext(), true));
     const t = ctx.currentTime;
     // Souffle filtré qui glisse vers l'aigu ou le grave selon le sens.
     const noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.18), ctx.sampleRate);

@@ -1007,7 +1007,7 @@ setInterval(() => {
 
 function tone(freq, delays, duration, volume) {
   try {
-    const ctx = new AudioContext();
+    const ctx = routeAudio(new AudioContext());
     delays.forEach((delay) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
@@ -1049,6 +1049,21 @@ if ("speechSynthesis" in window) {
 
 let speakId = 0;
 // Voix Piper : naturelle, générée sur le PC. Lue phrase par phrase (la suivante se prépare pendant la lecture).
+// Réglages → Micro : micro, sortie audio et volume de la voix (gardés sur ce PC).
+const audioPrefs = Object.assign({ input: "default", output: "default", volume: 1 }, JSON.parse(localStorage.getItem("audioPrefs") || "{}"));
+const saveAudioPrefs = () => localStorage.setItem("audioPrefs", JSON.stringify(audioPrefs));
+const audioOuts = new Set();
+// Envoie un son de Jarvis (voix naturelle, bips) vers la sortie choisie ; « default » = celle de Windows.
+function routeAudio(target, keep) {
+  if (keep) audioOuts.add(target);
+  if (audioPrefs.output !== "default") target?.setSinkId?.(audioPrefs.output).catch(() => {}); // appareil débranché : sortie de Windows
+  return target;
+}
+function setAudioOutput(id) {
+  audioPrefs.output = id;
+  saveAudioPrefs();
+  for (const t of [...audioOuts, piperAudio]) t?.setSinkId?.(id === "default" ? "" : id).catch(() => {});
+}
 let piperAudio = null;
 const usePiper = () => voicePrefs.engine !== "browser" && (state.status?.piper || []).length > 0;
 function piperChunk(text) {
@@ -1070,10 +1085,11 @@ function speakPiper(parts, id, done) {
       (blob) => {
         if (id !== speakId) return;
         const url = URL.createObjectURL(blob);
-        piperAudio = new Audio(url);
+        piperAudio = routeAudio(new Audio(url));
+        piperAudio.volume = audioPrefs.volume;
         piperAudio.onended = piperAudio.onerror = () => (URL.revokeObjectURL(url), playNext());
         try {
-          const ac = (speakPiper.ac ||= new AudioContext());
+          const ac = (speakPiper.ac ||= routeAudio(new AudioContext(), true));
           if (ac.state !== "running") ac.resume();
           else {
             const an = (speakPiper.an ||= Object.assign(ac.createAnalyser(), { fftSize: 256 }));
@@ -1133,6 +1149,7 @@ function speak(text, force = false) {
       if (frVoice) u.voice = frVoice;
       u.rate = voicePrefs.rate;
       u.pitch = voicePrefs.pitch;
+      u.volume = audioPrefs.volume;
       if (i === parts.length - 1) u.onend = done;
       u.onerror = (e) => e.error !== "interrupted" && e.error !== "canceled" && done();
       speechSynthesis.speak(u);
@@ -1184,6 +1201,25 @@ function newRecognizer(continuous) {
   r.continuous = continuous;
   return r;
 }
+// Lance l'écoute sur le micro choisi dans Réglages → Micro (sinon celui de Windows).
+function startRec(r) {
+  const id = audioPrefs.input;
+  if (!id || id === "default") return r.start();
+  navigator.mediaDevices
+    .getUserMedia({ audio: { deviceId: { exact: id } } })
+    .then((s) => {
+      const stop = () => s.getTracks().forEach((t) => t.stop());
+      if (rec !== r) return stop(); // écoute annulée entre-temps
+      r.addEventListener("end", stop);
+      try {
+        r.start(s.getAudioTracks()[0]);
+      } catch {
+        stop();
+        r.start();
+      }
+    })
+    .catch(() => rec === r && r.start()); // micro débranché : celui de Windows
+}
 
 function startCommand() {
   if (!SR) return toast("La reconnaissance vocale nécessite Chrome ou Edge.", true);
@@ -1217,7 +1253,7 @@ function startCommand() {
     if (state.wakeOn) setTimeout(startWake, 400);
   };
   try {
-    r.start();
+    startRec(r);
   } catch {
     recMode = null;
     return toast("Le micro est déjà utilisé. Réessaie dans un instant.", true);
@@ -1305,7 +1341,7 @@ function startWake() {
     if (state.wakeOn) setTimeout(startWake, wakeErrors ? Math.min(30000, 2000 * wakeErrors) : 300);
   };
   try {
-    r.start();
+    startRec(r);
   } catch {
     recMode = null;
   }

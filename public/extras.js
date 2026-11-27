@@ -34,7 +34,7 @@
     if (now - (last[name] || 0) < 90) return; // pas de rafale
     last[name] = now;
     try {
-      ctx ||= new AudioContext();
+      ctx ||= routeAudio(new AudioContext(), true);
       if (ctx.state !== "running") return void ctx.resume(); // le navigateur attend un premier clic
       SOUNDS[name]();
     } catch {
@@ -193,6 +193,64 @@
     );
     sec.append(head, row, info, fix);
 
+    // Choix des appareils : micro (entrée), sortie audio, volume de la voix.
+    const field = (label, control) => {
+      const f = el("div", "field");
+      f.append(el("label", null, label), control);
+      return f;
+    };
+    const inSel = el("select"), outSel = el("select");
+    const vol = el("input");
+    Object.assign(vol, { type: "range", min: 0, max: 100, step: 5, value: Math.round(audioPrefs.volume * 100) });
+    const volTxt = el("span", "mic-vol", `${vol.value} %`);
+    const volRow = el("div", "mic-volrow");
+    volRow.append(vol, volTxt);
+    const testOut = el("button", "proj-link set-link");
+    testOut.type = "button";
+    testOut.append(iconEl("volume", 14), document.createTextNode("Tester la sortie"));
+    const hint = el("p", "help", "Autorise le micro pour voir le nom de tes appareils.");
+    const devBox = el("div", "mic-devices");
+    devBox.append(field("Micro (entrée)", inSel));
+    if ("setSinkId" in HTMLMediaElement.prototype) devBox.append(field("Sortie audio", outSel));
+    devBox.append(field("Volume de la voix", volRow), testOut, hint);
+    sec.append(devBox);
+    inSel.onchange = () => {
+      audioPrefs.input = inSel.value;
+      saveAudioPrefs();
+      if (state.wakeOn) (stopRecognition(), startWake()); // l'écoute permanente passe tout de suite sur ce micro
+    };
+    outSel.onchange = () => {
+      setAudioOutput(outSel.value);
+      setTimeout(() => sfx("notif"), 250);
+    };
+    vol.oninput = () => {
+      audioPrefs.volume = vol.value / 100;
+      volTxt.textContent = `${vol.value} %`;
+      if (piperAudio) piperAudio.volume = audioPrefs.volume;
+    };
+    vol.onchange = saveAudioPrefs;
+    testOut.onclick = () => speak("Voici la sortie audio de Jarvis.", true);
+    async function fillDevices() {
+      let list = [];
+      try {
+        list = await navigator.mediaDevices.enumerateDevices();
+      } catch {
+        // Pas d'accès aux appareils : on garde « Par défaut ».
+      }
+      for (const [sel, kind, pref, name] of [[inSel, "audioinput", "input", "Micro"], [outSel, "audiooutput", "output", "Sortie"]]) {
+        const devs = list.filter((d) => d.kind === kind && d.deviceId && d.deviceId !== "communications");
+        const def = devs.find((d) => d.deviceId === "default");
+        const defName = def?.label.replace(/^(Par défaut|Default)\s*-\s*/i, "");
+        sel.replaceChildren(new Option(defName ? `Par défaut de Windows (${defName})` : "Par défaut de Windows", "default"));
+        devs.filter((d) => d !== def).forEach((d, i) => sel.append(new Option(d.label || `${name} ${i + 1}`, d.deviceId)));
+        sel.value = [...sel.options].some((o) => o.value === audioPrefs[pref]) ? audioPrefs[pref] : "default";
+      }
+      hint.hidden = list.some((d) => d.label);
+    }
+    fillDevices();
+    const onDevices = () => (sec.isConnected ? fillDevices() : navigator.mediaDevices.removeEventListener("devicechange", onDevices));
+    navigator.mediaDevices?.addEventListener("devicechange", onDevices); // casque branché ou débranché
+
     const STATES = { granted: ["Autorisé", "on"], denied: ["Bloqué", "off"], prompt: ["À autoriser", "warn"] };
     function show(st, why) {
       const [label, cls] = STATES[st] || STATES.prompt;
@@ -209,7 +267,7 @@
       ?.query({ name: "microphone" })
       .then((p) => {
         show(p.state);
-        p.onchange = () => show(p.state); // autorisé ailleurs (page des réglages) : mis à jour tout seul
+        p.onchange = () => (show(p.state), fillDevices()); // autorisé ailleurs (page des réglages) : mis à jour tout seul
       })
       .catch(() => {});
 
@@ -238,11 +296,18 @@
     }
     btn.onclick = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: audioPrefs.input !== "default" ? { deviceId: { exact: audioPrefs.input } } : true });
         show("granted");
         sfx("open");
         test(stream);
+        fillDevices();
       } catch (e) {
+        if (e.name === "OverconstrainedError") {
+          audioPrefs.input = "default";
+          saveAudioPrefs();
+          fillDevices();
+          return void (info.textContent = "Le micro choisi n'est plus branché : Jarvis repasse sur celui de Windows. Réessaie.");
+        }
         if (e.name === "NotFoundError") return void (info.textContent = "Aucun micro trouvé : branche un micro ou un casque, puis réessaie.");
         const system = e.name === "NotReadableError" || /system/i.test(e.message);
         show("denied", system ? "Windows (ou une autre appli) empêche l'accès au micro : ouvre les réglages Windows du micro et active l'accès pour les applications de bureau." : BLOCKED);
