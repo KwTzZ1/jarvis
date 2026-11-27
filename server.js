@@ -1,4 +1,5 @@
 import { synthesize, piperVoices } from "./lib/tts.js";
+import { systemInfo } from "./lib/system.js";
 import "./lib/boot.js";
 import express from "express";
 import * as google from "./lib/google.js";
@@ -80,6 +81,8 @@ function status() {
 }
 
 app.get("/api/status", (req, res) => res.json(status()));
+
+app.get("/api/system", wrap(async (req, res) => res.json(await systemInfo())));
 
 // Voix naturelle (Piper, sur le PC).
 app.post(

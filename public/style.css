@@ -609,3 +609,14 @@ body.asleep .grid-bg { display: none; }
 .sps-pl:hover { background: rgba(0, 229, 255, .12); color: var(--cyan); }
 .sps-new { display: flex; gap: 6px; margin-top: 4px; }
 .sps-new input { flex: 1; min-width: 0; font-size: 12px; }
+
+/* Widget Système */
+.sys { display: flex; flex-direction: column; gap: 9px; }
+.sys-top { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
+.sys-val { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sys-bar { height: 5px; margin-top: 4px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.sys-bar span { display: block; height: 100%; width: 0; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); transition: width .6s; }
+.sys-bar span.hot { background: #ff5577; box-shadow: 0 0 8px #ff5577; }
+.sys-foot { font-size: 11px; }
+/* Widget Bloc-notes */
+.notes-area { width: 100%; height: 100%; min-height: 80px; resize: none; border: none; background: transparent; color: var(--text); font: inherit; font-size: 13px; line-height: 1.5; outline: none; }

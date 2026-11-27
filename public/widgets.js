@@ -161,6 +161,8 @@ const WIDGET_TYPES = {
   shortcuts: { title: "Raccourcis", icon: "zap", size: "m", render: renderShortcutsWidget },
   discord: { title: "Discord", icon: "message", size: "t", render: renderDiscordWidget },
   images: { title: "Mes images", icon: "image", size: "m", render: renderImagesWidget },
+  system: { title: "Système", icon: "server", size: "s", render: renderSystemWidget },
+  notes: { title: "Bloc-notes", icon: "edit", size: "m", render: renderNotesWidget },
 };
 const SIZES = ["s", "m", "t", "l"];
 const SIZE_LABELS = { s: "petit", m: "large", t: "haut", l: "grand" };
@@ -456,6 +458,57 @@ function togglePlaylistPicker(li, t) {
     loadPlaylists().then(fill);
   }
   li.append(box);
+}
+
+// Système : processeur, mémoire, disque (toutes les 3 s quand la page Widgets est visible).
+let systemData = null;
+function renderSystemWidget(body) {
+  if (!body.querySelector(".sys")) {
+    const box = el("div", "sys");
+    for (const [k, label] of [["cpu", "Processeur"], ["ram", "Mémoire"], ["disk", "Disque C:"]]) {
+      const row = el("div", "sys-row");
+      row.dataset.k = k;
+      const bar = el("div", "sys-bar");
+      bar.append(el("span"));
+      row.append(el("div", "sys-top"), bar);
+      row.firstChild.append(el("span", null, label), el("b", "sys-val", "…"));
+      box.append(row);
+    }
+    box.append(el("div", "sys-foot muted"));
+    body.replaceChildren(box);
+  }
+  const s = systemData;
+  if (!s) return;
+  const go = (b) => (b / 1073741824).toFixed(1).replace(".", ",") + " Go";
+  const set = (k, pct, text) => {
+    const row = body.querySelector(`.sys-row[data-k="${k}"]`);
+    row.querySelector(".sys-val").textContent = text;
+    const bar = row.querySelector(".sys-bar span");
+    bar.style.width = (pct ?? 0) + "%";
+    bar.classList.toggle("hot", pct > 85);
+  };
+  set("cpu", s.cpu, s.cpu == null ? "…" : s.cpu + " %");
+  set("ram", Math.round((100 * s.ram.used) / s.ram.total), `${go(s.ram.used)} / ${go(s.ram.total)}`);
+  if (s.disk) set("disk", Math.round(100 - (100 * s.disk.free) / s.disk.total), `${go(s.disk.free)} libres`);
+  body.querySelector(".sys-foot").textContent = `Allumé depuis ${Math.floor(s.uptime / 3600)} h ${String(Math.floor((s.uptime % 3600) / 60)).padStart(2, "0")}`;
+}
+setInterval(() => {
+  if (page !== 1 || document.hidden || !document.querySelector('#board .widget-body[data-type="system"]')) return;
+  api("/api/system").then((s) => ((systemData = s), renderTypes(["system"])), () => {});
+}, 3000);
+
+// Bloc-notes : gardé sur ce PC, enregistré pendant que tu écris.
+function renderNotesWidget(body) {
+  if (body.querySelector("textarea")) return;
+  const area = el("textarea", "notes-area");
+  area.placeholder = "Tes notes… (enregistrées automatiquement)";
+  area.value = localStorage.getItem("jarvisNotes") || "";
+  let t;
+  area.oninput = () => {
+    clearTimeout(t);
+    t = setTimeout(() => localStorage.setItem("jarvisNotes", area.value), 400);
+  };
+  body.replaceChildren(area);
 }
 
 function markPlaying(body) {

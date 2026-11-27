@@ -184,6 +184,8 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 
 ## Exemples
 
+- « Ouvre Discord », « lance Steam », « ouvre la calculatrice » (liste fermée : Discord, Steam, Spotify, Epic Games, Paramètres, Calculatrice, Bloc-notes, Explorateur, Gestionnaire des tâches, Capture d'écran)
+- « Comment va mon PC ? » (processeur, mémoire, disque)
 - « Jarvis, fais-moi mon briefing »
 - « Qu'est-ce que j'ai demain ? »
 - « Ajoute un rendez-vous chez le coiffeur samedi à 14 h »
@@ -210,6 +212,8 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 - **En direct** :
   - Spotify : titre en cours avec une timeline (clique ou glisse pour avancer), pochettes de tes playlists ; un clic lance la playlist et l'ouvre dans le widget avec tous ses titres (clic sur un titre pour le jouer, flèche pour revenir) ;
   - **Spotify (recherche)** : cherche un titre, ▶ pour l'écouter, + pour l'ajouter à une de tes playlists ou en créer une nouvelle (la première fois : Réglages → Spotify → Déconnecter puis Connecter, pour donner l'autorisation de modifier tes playlists) ;
+  - **Système** : processeur, mémoire et disque en direct (barre rouge au-delà de 85 %) ;
+  - **Bloc-notes** : tes notes, enregistrées automatiquement sur ce PC ;
   - Discord : messages du salon mis à jour toutes les 5 secondes, avec avatars ; les nouveaux s'allument ;
   - Mails : expéditeur, heure, objet et début du message ;
   - le reste se met à jour toutes les minutes tant que la page Widgets est ouverte.
