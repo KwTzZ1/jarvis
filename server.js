@@ -194,10 +194,22 @@ app.get(
     res.json({ playlists: await spotify.myPlaylists(req.query.refresh === "1") });
   }),
 );
+app.get(
+  "/api/spotify/playlist/:id",
+  wrap(async (req, res) => {
+    if (!spotify.spotifyConnected()) return res.status(404).json({ error: "Spotify n'est pas connecté." });
+    if (!/^(liked|[A-Za-z0-9]{1,40})$/.test(req.params.id)) return res.status(400).json({ error: "Playlist inconnue." });
+    res.json(await spotify.playlistView(req.params.id));
+  }),
+);
 app.post(
   "/api/spotify/play",
   wrap(async (req, res) => {
     const b = req.body || {};
+    if (typeof b.playlistId === "string") {
+      if (!/^(liked|[A-Za-z0-9]{1,40})$/.test(b.playlistId)) return res.status(400).json({ error: "Playlist inconnue." });
+      return res.json(await spotify.playFrom(b.playlistId, b.position));
+    }
     if (b.liked) return res.json(await spotify.playLiked(true));
     if (typeof b.playlist === "string") return res.json(await spotify.playPlaylist(b.playlist, { order: b.order, start: b.start }));
     res.status(400).json({ error: "Rien à lancer." });
@@ -208,7 +220,7 @@ app.post("/api/spotify/device", (req, res) => {
   res.json({ ok: true, ready: spotify.playerReady() });
 });
 
-const MUSIC_COMMANDS = new Set(["play", "pause", "next", "previous", "volume", "shuffle"]);
+const MUSIC_COMMANDS = new Set(["play", "pause", "next", "previous", "volume", "shuffle", "seek"]);
 app.post(
   "/api/music/:cmd",
   wrap(async (req, res) => {

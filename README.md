@@ -208,7 +208,7 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
   - tire le coin en bas à droite pour changer sa taille ;
   - **pince** (deux doigts sur écran tactile) ou **Ctrl + molette** sur un widget pour l'agrandir ou le réduire.
 - **En direct** :
-  - Spotify : titre en cours, pochettes de tes playlists et titres likés, un clic pour lancer ;
+  - Spotify : titre en cours avec une timeline (clique ou glisse pour avancer), pochettes de tes playlists ; un clic lance la playlist et l'ouvre dans le widget avec tous ses titres (clic sur un titre pour le jouer, flèche pour revenir) ;
   - Discord : messages du salon mis à jour toutes les 5 secondes, avec avatars ; les nouveaux s'allument ;
   - Mails : expéditeur, heure, objet et début du message ;
   - le reste se met à jour toutes les minutes tant que la page Widgets est ouverte.
@@ -216,6 +216,9 @@ Si rien ne correspond, tu peux demander à Jarvis ou chercher sur le web.
 ## Voix
 
 Réglages → **Voix** : choisis la voix, la vitesse et la hauteur (plus grave = plus « majordome »), puis « Tester ».
+Le bouton **Style Jarvis** règle tout en un clic (voix masculine, grave et posée).
+
+**Images dans le chat** : clique sur une image (envoyée ou reçue) pour l'afficher en grand ; flèches pour passer de l'une à l'autre, Échap pour fermer.
 
 ## Performances
 

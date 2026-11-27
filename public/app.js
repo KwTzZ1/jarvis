@@ -491,10 +491,31 @@ function renderMusicInto(box, r) {
   meta.append(el("div", "title", m.title), el("div", "artist", m.artist));
   if (m.device) meta.append(withIcon("div", "artist", "speaker", m.device, 12));
   np.append(meta);
-  const bar = el("div", "bar");
-  const fill = el("span");
-  fill.style.width = m.durationMs ? `${Math.min(100, (100 * m.progressMs) / m.durationMs)}%` : "0";
-  bar.append(fill);
+  // Timeline : on peut cliquer ou glisser pour avancer dans le morceau.
+  const bar = el("div", "sp-time");
+  const seek = el("input", "sp-seek");
+  seek.type = "range";
+  seek.min = 0;
+  seek.max = m.durationMs || 0;
+  seek.step = 1000;
+  seek.disabled = !m.durationMs;
+  seek.oninput = () => {
+    seek.dataset.dragging = "1";
+    bar.querySelector(".sp-cur").textContent = fmtMs(Number(seek.value));
+    paintSeek(seek);
+  };
+  seek.onchange = async () => {
+    const pos = Number(seek.value);
+    delete seek.dataset.dragging;
+    if (cache.music?.data) Object.assign(cache.music.data, { progressMs: pos }), (cache.music.at = Date.now());
+    try {
+      await api("/api/music/seek", { method: "POST", body: { value: pos } });
+      setTimeout(refreshMusic, 600);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  bar.append(el("span", "sp-cur"), seek, el("span", "sp-dur", fmtMs(m.durationMs)));
   const controls = el("div", "controls");
   [["previous", "prev", "Précédent"], [m.playing ? "pause" : "play", m.playing ? "pause" : "play", m.playing ? "Pause" : "Lecture"], ["next", "next", "Suivant"]].forEach(([cmd, ic, title]) => {
     const b = el("button");
@@ -513,12 +534,34 @@ function renderMusicInto(box, r) {
     controls.append(b);
   });
   box.append(np, bar, controls);
+  tickTimelines();
   withLib();
 }
+
+const fmtMs = (ms) => (ms ? `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}` : "0:00");
+const paintSeek = (s) => s.style.setProperty("--p", `${s.max > 0 ? (100 * s.value) / s.max : 0}%`);
+
+// Fait avancer toutes les timelines chaque seconde (sans redemander à Spotify).
+function tickTimelines() {
+  const m = cache.music?.data;
+  if (!m?.durationMs) return;
+  const pos = Math.min(m.durationMs, m.progressMs + (m.playing ? Date.now() - (cache.music.at || Date.now()) : 0));
+  document.querySelectorAll(".sp-time").forEach((bar) => {
+    const seek = bar.querySelector(".sp-seek");
+    if (seek.dataset.dragging) return;
+    seek.value = pos;
+    paintSeek(seek);
+    bar.querySelector(".sp-cur").textContent = fmtMs(pos);
+  });
+  // Morceau terminé : on demande le suivant à Spotify.
+  if (m.playing && pos >= m.durationMs && Date.now() - (cache.music.at || 0) > 1500) refreshMusic();
+}
+setInterval(() => !document.hidden && tickTimelines(), 1000);
 
 async function refreshMusic() {
   try {
     cache.music = await api("/api/music");
+    cache.music.at = Date.now(); // pour faire avancer la timeline entre deux mises à jour
     renderMusicInto($("#music"), cache.music);
     emit("music");
   } catch {
@@ -823,8 +866,9 @@ function showFoundImages(a) {
     img.referrerPolicy = "no-referrer";
     img.onerror = () => fig.remove();
     img.onload = scrollChat;
+    img.dataset.link = it.link || it.url;
+    img.dataset.caption = `${it.title} — ${it.source}`;
     fig.append(img, el("span", null, it.source));
-    fig.onclick = () => openExternal(it.link || it.url);
     grid.append(fig);
   }
   card.append(grid);
@@ -842,11 +886,10 @@ function showGeneratedImage(a) {
   img.title = a.prompt;
   img.onload = scrollChat;
   const actions = el("div", "gen-actions");
-  const open = el("a", "proj-link");
-  open.href = a.url;
-  open.target = "_blank";
-  open.rel = "noopener";
-  open.append(iconEl("external", 14), document.createTextNode("Ouvrir en grand"));
+  const open = el("button", "proj-link");
+  open.type = "button";
+  open.append(iconEl("external", 14), document.createTextNode("Agrandir"));
+  open.onclick = () => img.click();
   const dl = el("a", "proj-link");
   dl.href = a.url;
   dl.download = "jarvis-image.jpg";
@@ -970,7 +1013,7 @@ const beepShort = () => tone(1200, [0], 0.15, 0.15);
 // ---------- Voix : synthèse ----------
 let frVoice = null;
 // Réglages de voix (gardés sur ce PC) : voix choisie, vitesse, ton (grave = plus "majordome").
-const voicePrefs = Object.assign({ name: "", rate: 1, pitch: 0.85 }, JSON.parse(localStorage.getItem("voicePrefs") || "{}"));
+const voicePrefs = Object.assign({ name: "", rate: 1.05, pitch: 0.75 }, JSON.parse(localStorage.getItem("voicePrefs") || "{}"));
 const saveVoicePrefs = () => localStorage.setItem("voicePrefs", JSON.stringify(voicePrefs));
 function pickVoice() {
   const all = speechSynthesis.getVoices();
@@ -1241,6 +1284,13 @@ $("#reactor").onclick = toggleMic;
 const isTyping = () => ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
 let spaceTalk = false;
 document.addEventListener("keydown", (e) => {
+  if (viewer.node && !viewer.node.hidden) {
+    if (e.key === "Escape") closeViewer();
+    else if (e.key === "ArrowLeft") stepViewer(-1);
+    else if (e.key === "ArrowRight") stepViewer(1);
+    e.preventDefault();
+    return;
+  }
   if (e.key === "Escape") closeSettings();
   if (e.code !== "Space" || isTyping() || !$("#settings").hidden) return;
   e.preventDefault();
@@ -1326,6 +1376,20 @@ function voiceSection(nav) {
     pickVoice();
   };
   row("Voix", sel);
+  // Préréglage "Jarvis" : voix masculine posée, un peu grave, débit vif.
+  const jarvis = el("button", "proj-link set-link");
+  jarvis.type = "button";
+  jarvis.append(iconEl("zap", 14), document.createTextNode("Style Jarvis (1 clic)"));
+  jarvis.onclick = () => {
+    const fr = voices.filter((v) => v.lang.toLowerCase().startsWith("fr"));
+    const male = fr.find((v) => /natural|online/i.test(v.name) && /henri|remy|paul|claude|thomas|gerard|male|homme/i.test(v.name)) || fr.find((v) => /henri|remy|paul|claude|thomas|gerard/i.test(v.name));
+    Object.assign(voicePrefs, { name: male?.name || "", rate: 1.05, pitch: 0.75 });
+    saveVoicePrefs();
+    pickVoice();
+    closeSettings();
+    openSettings().then(() => speak("Système Jarvis en ligne. À votre service.", true));
+  };
+  sec.append(jarvis);
   const slider = (key, min, max, step, fmt) => {
     const wrap = el("div", "field-input");
     const input = el("input");
@@ -1595,3 +1659,80 @@ document.addEventListener("visibilitychange", () => {
   setInterval(refreshAll, 5 * 60 * 1000);
   setInterval(loadStatus, 15000);
 })();
+
+// ---------- Visionneuse : un clic sur une image du chat l'affiche en grand ----------
+const viewer = { list: [], i: 0, node: null };
+const CHAT_IMAGES = ".msg-images img, .gen-image > img, .found-item img";
+
+function viewerButton(cls, icon, title, onclick) {
+  const b = el("button", "vw-btn " + cls);
+  b.type = "button";
+  b.title = title;
+  b.append(iconEl(icon, 22));
+  b.onclick = (e) => (e.stopPropagation(), onclick());
+  return b;
+}
+
+function openViewer(list, i) {
+  viewer.list = list;
+  viewer.i = i;
+  if (!viewer.node) {
+    const n = el("div", "viewer");
+    const img = el("img", "vw-img");
+    img.alt = "";
+    const bar = el("div", "vw-bar");
+    n.append(img, bar, viewerButton("vw-close", "x", "Fermer (Échap)", closeViewer), viewerButton("vw-prev", "chevron-left", "Précédente", () => stepViewer(-1)), viewerButton("vw-next", "chevron-right", "Suivante", () => stepViewer(1)));
+    n.onclick = (e) => e.target === n && closeViewer();
+    document.body.append(n);
+    viewer.node = n;
+  }
+  showViewerImage();
+  viewer.node.hidden = false;
+}
+
+function showViewerImage() {
+  const it = viewer.list[viewer.i];
+  const n = viewer.node;
+  n.querySelector(".vw-img").src = it.src;
+  const multi = viewer.list.length > 1;
+  n.querySelector(".vw-prev").hidden = !multi;
+  n.querySelector(".vw-next").hidden = !multi;
+  const bar = n.querySelector(".vw-bar");
+  bar.replaceChildren();
+  if (it.caption) bar.append(el("span", "vw-cap", it.caption));
+  if (multi) bar.append(el("span", "vw-count", `${viewer.i + 1} / ${viewer.list.length}`));
+  // Téléchargement seulement pour nos propres images (les autres s'ouvrent à leur source).
+  if (it.src.startsWith("data:") || it.src.startsWith(location.origin)) {
+    const dl = el("a", "proj-link");
+    dl.href = it.src;
+    dl.download = "jarvis-image.jpg";
+    dl.append(document.createTextNode("Télécharger"));
+    bar.append(dl);
+  }
+  if (it.link) {
+    const src = el("button", "proj-link");
+    src.type = "button";
+    src.append(iconEl("external", 14), document.createTextNode("Voir la source"));
+    src.onclick = () => openExternal(it.link);
+    bar.append(src);
+  }
+}
+
+function stepViewer(d) {
+  if (viewer.list.length < 2) return;
+  viewer.i = (viewer.i + d + viewer.list.length) % viewer.list.length;
+  showViewerImage();
+}
+
+function closeViewer() {
+  if (!viewer.node) return;
+  viewer.node.hidden = true;
+  viewer.node.querySelector(".vw-img").removeAttribute("src");
+}
+
+$("#chat").addEventListener("click", (e) => {
+  const img = e.target.closest(CHAT_IMAGES);
+  if (!img) return;
+  const imgs = [...img.closest(".msg").querySelectorAll(CHAT_IMAGES)];
+  openViewer(imgs.map((x) => ({ src: x.currentSrc || x.src, caption: x.dataset.caption || "", link: x.dataset.link })), imgs.indexOf(img));
+});

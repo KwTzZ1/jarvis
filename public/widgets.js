@@ -207,15 +207,23 @@ function renderListWidget(body, kind) {
 // Spotify : ce qui joue + tes playlists en vignettes cliquables (mises à jour en direct).
 function renderSpotifyWidget(body) {
   let now = body.querySelector(".spw-now");
-  let grid = body.querySelector(".spw-grid");
   if (!now) {
     now = el("div", "spw-now");
-    grid = el("div", "spw-grid");
-    body.replaceChildren(now, el("div", "spw-label", "Tes playlists"), grid);
+    const lib = el("div", "spw-lib");
+    lib.append(el("div", "spw-label", "Tes playlists"), el("div", "spw-grid"));
+    const pl = el("div", "spw-pl");
+    pl.hidden = true;
+    body.replaceChildren(now, lib, pl);
     body.classList.add("spw");
   }
+  const grid = body.querySelector(".spw-grid");
   renderMusicInto(now, cache.music);
   now.querySelector(".sp-lib")?.remove(); // le menu déroulant est remplacé par les vignettes
+  // Une playlist est ouverte : on affiche ses titres (avec celui qui joue en surbrillance).
+  const open = body.dataset.open;
+  body.querySelector(".spw-lib").hidden = !!open;
+  body.querySelector(".spw-pl").hidden = !open;
+  if (open) return markPlaying(body);
   const sp = state.status?.spotify;
   if (!sp?.connected) return grid.replaceChildren();
   if (!sp.scopesOk) return grid.replaceChildren(el("div", "muted", "Reconnecte Spotify pour voir tes playlists."));
@@ -231,7 +239,7 @@ function renderSpotifyWidget(body) {
   const lc = el("div", "spw-cover");
   lc.append(iconEl("heart", 26));
   liked.append(lc, el("span", null, "Titres likés"));
-  liked.onclick = () => api("/api/spotify/play", { method: "POST", body: { liked: true } }).then(() => setTimeout(refreshMusic, 800), (e) => toast(e.message, true));
+  liked.onclick = () => openPlaylist(body, { id: "liked", name: "Titres likés", image: null });
   grid.replaceChildren(liked);
   for (const p of spotifyLib.playlists) {
     const c = el("button", "spw-card");
@@ -246,15 +254,102 @@ function renderSpotifyWidget(body) {
       cover.append(img);
     } else cover.append(iconEl("music", 22));
     c.append(cover, el("span", null, p.name));
-    c.onclick = () => {
-      c.classList.add("starting");
-      api("/api/spotify/play", { method: "POST", body: { playlist: p.name } }).then(
-        () => (toast(`Lecture : ${p.name}`), setTimeout(refreshMusic, 800)),
-        (e) => toast(e.message, true),
-      ).finally(() => c.classList.remove("starting"));
-    };
+    c.onclick = () => openPlaylist(body, p);
     grid.append(c);
   }
+}
+
+// Clic sur une playlist : elle se lance et s'ouvre dans le widget avec tous ses titres.
+const playlistViews = new Map();
+function loadPlaylistView(id) {
+  const hit = playlistViews.get(id);
+  if (hit && Date.now() - hit.at < 120_000) return hit.promise;
+  const promise = api(`/api/spotify/playlist/${encodeURIComponent(id)}`);
+  playlistViews.set(id, { at: Date.now(), promise });
+  promise.catch(() => playlistViews.delete(id));
+  return promise;
+}
+
+function playFromPlaylist(p, position = 0) {
+  return api("/api/spotify/play", { method: "POST", body: { playlistId: p.id, position } }).then(
+    () => setTimeout(refreshMusic, 800),
+    (e) => toast(e.message, true),
+  );
+}
+
+const fmtDuration = (ms) => (ms ? `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}` : "");
+
+function openPlaylist(body, p) {
+  body.dataset.open = p.id;
+  const pl = body.querySelector(".spw-pl");
+  const back = el("button", "spw-back");
+  back.type = "button";
+  back.title = "Retour aux playlists";
+  back.append(iconEl("chevron-left", 18));
+  back.onclick = () => {
+    delete body.dataset.open;
+    renderSpotifyWidget(body);
+  };
+  const cover = el("div", "spw-cover spw-pl-cover" + (p.id === "liked" ? " liked" : ""));
+  if (p.image) {
+    const img = el("img");
+    img.src = p.image;
+    img.alt = "";
+    cover.append(img);
+  } else cover.append(iconEl(p.id === "liked" ? "heart" : "music", 18));
+  const info = el("div", "spw-pl-info");
+  const count = el("div", "spw-pl-count", "Chargement des titres…");
+  info.append(el("div", "spw-pl-name", p.name), count);
+  const playAll = el("button", "mini-icon spw-playall");
+  playAll.type = "button";
+  playAll.title = "Lire depuis le début";
+  playAll.append(iconEl("play", 14));
+  playAll.onclick = () => playFromPlaylist(p, 0);
+  const head = el("div", "spw-pl-head");
+  head.append(back, cover, info, playAll);
+  const list = el("ol", "spw-tracks");
+  pl.replaceChildren(head, list);
+  renderSpotifyWidget(body);
+  // Lancement immédiat (les titres likés en aléatoire, comme avant).
+  if (p.id === "liked") api("/api/spotify/play", { method: "POST", body: { liked: true } }).then(() => setTimeout(refreshMusic, 800), (e) => toast(e.message, true));
+  else playFromPlaylist(p, 0).then(() => toast(`Lecture : ${p.name}`));
+  loadPlaylistView(p.id).then(
+    (v) => {
+      if (body.dataset.open !== p.id) return;
+      count.textContent = `${v.tracks.length} titre${v.tracks.length > 1 ? "s" : ""}`;
+      const frag = document.createDocumentFragment();
+      v.tracks.forEach((t, i) => {
+        const li = el("li");
+        const b = el("button", "spw-track");
+        b.type = "button";
+        b.dataset.uri = t.uri;
+        b.title = `${t.name} — ${t.artist}`;
+        const pic = el("div", "spw-t-pic");
+        if (t.image) {
+          const img = el("img");
+          img.src = t.image;
+          img.alt = "";
+          img.loading = "lazy";
+          pic.append(img);
+        }
+        const txt = el("div", "spw-t-txt");
+        txt.append(el("div", "spw-t-name", t.name), el("div", "spw-t-artist", t.artist));
+        b.append(el("span", "spw-t-num", String(i + 1)), pic, txt, el("span", "spw-t-dur", fmtDuration(t.duration)));
+        b.onclick = () => playFromPlaylist(p, i);
+        li.append(b);
+        frag.append(li);
+      });
+      list.replaceChildren(frag);
+      if (!v.tracks.length) list.append(el("li", "muted", "Playlist vide."));
+      markPlaying(body);
+    },
+    (e) => body.dataset.open === p.id && ((count.textContent = "Titres indisponibles"), list.replaceChildren(el("li", "muted", e.message))),
+  );
+}
+
+function markPlaying(body) {
+  const uri = cache.music?.data?.uri;
+  body.querySelectorAll(".spw-track").forEach((b) => b.classList.toggle("playing", !!uri && b.dataset.uri === uri));
 }
 
 // Mails : expéditeur, objet, aperçu et heure ; clic = résumé par Jarvis.
