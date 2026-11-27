@@ -54,7 +54,12 @@ function status() {
     provider: activeProvider(),
     providerPref: process.env.AI_PROVIDER || "auto",
     google: { configured: google.googleConfigured(), connected: google.googleConnected() },
-    spotify: { configured: spotify.spotifyConfigured(), connected: spotify.spotifyConnected() },
+    spotify: {
+      configured: spotify.spotifyConfigured(),
+      connected: spotify.spotifyConnected(),
+      playerAllowed: spotify.spotifyConnected() && spotify.playerAllowed(),
+      playerReady: spotify.playerReady(),
+    },
     usage: usageTotals,
   };
 }
@@ -157,6 +162,20 @@ app.get(
     res.json(await settle(() => spotify.nowPlaying()));
   }),
 );
+
+// Lecteur intégré (Spotify Premium) : la page récupère un jeton court et déclare son appareil.
+app.get(
+  "/api/spotify/token",
+  wrap(async (req, res) => {
+    if (!spotify.spotifyConnected()) return res.status(404).json({ error: "Spotify n'est pas connecté." });
+    res.set("Cache-Control", "no-store");
+    res.json({ token: await spotify.playerToken() });
+  }),
+);
+app.post("/api/spotify/device", (req, res) => {
+  spotify.setPlayerDevice(req.body?.id ?? null);
+  res.json({ ok: true, ready: spotify.playerReady() });
+});
 
 const MUSIC_COMMANDS = new Set(["play", "pause", "next", "previous", "volume", "shuffle"]);
 app.post(

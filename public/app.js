@@ -29,7 +29,7 @@ const state = {
 // Dernières données reçues, partagées entre la page principale et les widgets.
 const cache = { dashboard: null, music: null };
 // Petits "abonnements" : les widgets se redessinent quand les données changent.
-const hooks = { data: [], music: [], timers: [], reply: [], tick: [] };
+const hooks = { data: [], music: [], timers: [], reply: [], tick: [], status: [] };
 const emit = (name) => hooks[name].forEach((fn) => {
   try {
     fn();
@@ -150,6 +150,7 @@ function applyStatus(s) {
   setConn("#connGoogle", s.google, "google");
   setConn("#connSpotify", s.spotify, "spotify");
   updateCost(s.usage);
+  emit("status");
 
   // Bloqué = aucune IA ne peut répondre. Dès que ça se débloque, on le dit (une seule fois).
   const providerOk = s.provider === "claude" ? s.aiOk : s.provider === "groq" ? f.ok : false;
@@ -375,7 +376,15 @@ function renderMusicInto(box, r) {
   if (r.error === "not_connected") return (box.textContent = "Connecte Spotify pour voir et contrôler ta musique.");
   if (r.error) return (box.textContent = r.error);
   const m = r.data;
-  if (!m.title) return (box.textContent = "Rien en lecture. Demande-moi de mettre de la musique.");
+  if (!m.title) {
+    const sp = state.status?.spotify;
+    box.textContent = sp && !sp.playerAllowed
+      ? "Pour que la musique sorte de Jarvis : Déconnecter puis Connecter Spotify (nouvelle autorisation « lecture »)."
+      : sp?.playerReady
+        ? "Lecteur Jarvis prêt : dis « joue » suivi d'un titre ou d'un artiste."
+        : "Rien en lecture. Demande-moi de mettre de la musique.";
+    return;
+  }
   const np = el("div", "np");
   if (m.image) {
     const img = el("img");

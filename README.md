@@ -87,11 +87,15 @@ Tant que l'app Google est en mode test, la connexion expire environ tous les 7 j
 ## 3. Spotify
 
 1. Va sur https://developer.spotify.com/dashboard et clique **Create app**.
-2. Redirect URI : `http://127.0.0.1:3000/auth/spotify/callback` (bien `127.0.0.1`, pas `localhost`). Coche **Web API**.
-3. Dans **User Management**, ajoute l'e-mail de ton compte Spotify.
+2. Redirect URI : `http://127.0.0.1:3000/auth/spotify/callback` (bien `127.0.0.1`, pas `localhost`). Coche **Web API** et **Web Playback SDK**.
+   Si les cases sont grisées, c'est que le compte connecté n'est pas Premium : Spotify réserve son API aux comptes Premium.
+3. Dans **User Management**, ajoute l'e-mail de ton compte Spotify (si Spotify refuse la connexion).
 4. Colle le Client ID et le Client secret dans **Réglages > Spotify**, puis clique **Connecter**.
 
-Voir ce qui joue marche avec tous les comptes. **Contrôler** la musique demande **Spotify Premium** et Spotify ouvert sur un appareil.
+**Lecteur intégré (Premium) :** une fois Spotify connecté, Jarvis devient lui-même un appareil Spotify, « Jarvis (PC) ».
+Dis « joue Daft Punk » : la musique sort directement de Jarvis, sans ouvrir l'appli Spotify. Pause, suivant, volume et le widget Spotify le pilotent.
+La fenêtre Jarvis doit rester ouverte (elle peut être réduite) : c'est elle qui joue le son.
+Si tu avais connecté Spotify avec une ancienne version, clique **Déconnecter** puis **Connecter** pour accorder l'autorisation de lecture.
 
 ---
 
