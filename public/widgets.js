@@ -351,7 +351,9 @@ function openPlaylist(body, p) {
   );
 }
 
-// Spotify : recherche de titres, lecture, ajout à une playlist (ou nouvelle playlist).
+// Spotify : recherche en direct (dès qu'on tape), recherches récentes, écoute et ajout à une playlist.
+const spsRecent = () => JSON.parse(localStorage.getItem("spsRecent") || "[]");
+const spsRemember = (q) => q && localStorage.setItem("spsRecent", JSON.stringify([q, ...spsRecent().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 6)));
 function renderSpotifySearchWidget(body) {
   const sp = state.status?.spotify;
   if (!sp?.connected) return body.replaceChildren(el("div", "muted", "Connecte Spotify dans les réglages."));
@@ -360,38 +362,74 @@ function renderSpotifySearchWidget(body) {
   const form = el("form", "sps-form");
   const input = el("input");
   input.type = "search";
-  input.placeholder = "Chercher un titre, un artiste…";
-  const go = el("button", "mini-icon");
-  go.type = "submit";
-  go.title = "Chercher";
-  go.append(iconEl("arrow-up", 14));
-  go.querySelector(".ic").style.transform = "rotate(90deg)";
-  form.append(input, go);
+  input.placeholder = "Titre, artiste, album…";
+  input.autocomplete = "off";
+  const clear = el("button", "sps-clear");
+  clear.type = "button";
+  clear.title = "Effacer";
+  clear.hidden = true;
+  clear.append(iconEl("x", 13));
+  form.append(iconEl("search", 16), input, clear);
   const list = el("ul", "sps-list");
-  list.append(el("li", "muted", "Tape un titre puis Entrée. ▶ pour écouter, + pour l'ajouter à une playlist."));
   body.replaceChildren(form, list);
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    const q = input.value.trim();
-    if (!q) return;
-    list.replaceChildren(el("li", "muted", "Recherche…"));
+  let timer;
+  let seq = 0;
+  const showHome = () => {
+    const recent = spsRecent();
+    if (!recent.length) {
+      const empty = el("li", "sps-empty");
+      empty.append(iconEl("headphones", 30), el("div", null, "Cherche un titre, un artiste ou un album"), el("small", null, "Clique un résultat pour l'écouter, + pour l'ajouter à une playlist"));
+      return list.replaceChildren(empty);
+    }
+    const li = el("li", "sps-recent");
+    const chips = el("div", "sps-chips");
+    for (const q of recent) {
+      const c = el("button", "sps-chip", q);
+      c.type = "button";
+      c.onclick = () => ((input.value = q), run(q));
+      chips.append(c);
+    }
+    li.append(el("div", "sps-label", "Recherches récentes"), chips);
+    list.replaceChildren(li);
+  };
+  const run = async (q) => {
+    const id = ++seq;
+    clear.hidden = !q;
+    if (!q) return showHome();
+    list.replaceChildren(...Array.from({ length: 4 }, () => el("li", "sps-skel")));
     try {
       const { tracks } = await api(`/api/spotify/search?q=${encodeURIComponent(q)}`);
-      list.replaceChildren();
-      if (!tracks.length) return list.append(el("li", "muted", "Aucun résultat."));
-      for (const t of tracks) list.append(searchResult(t));
+      if (id !== seq) return; // une recherche plus récente est déjà partie
+      if (!tracks.length) return list.replaceChildren(el("li", "sps-empty", `Aucun résultat pour « ${q} ».`));
+      list.replaceChildren(...tracks.map((t) => searchResult(t, () => spsRemember(q))));
       markPlaying(body);
     } catch (err) {
-      list.replaceChildren(el("li", "muted", err.message));
+      if (id === seq) list.replaceChildren(el("li", "sps-empty", err.message));
     }
   };
+  input.oninput = () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    clear.hidden = !q;
+    timer = setTimeout(() => run(q), q ? 380 : 0);
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    clearTimeout(timer);
+    spsRemember(input.value.trim());
+    run(input.value.trim());
+  };
+  clear.onclick = () => ((input.value = ""), run(""), input.focus());
+  showHome();
 }
 
-function searchResult(t) {
+function searchResult(t, onUse) {
   const li = el("li");
   const row = el("div", "spw-track sps-row");
   row.dataset.uri = t.uri;
-  const pic = el("div", "spw-t-pic");
+  const pic = el("button", "sps-cover");
+  pic.type = "button";
+  pic.title = "Écouter";
   if (t.image) {
     const img = el("img");
     img.src = t.image;
@@ -399,19 +437,23 @@ function searchResult(t) {
     img.loading = "lazy";
     pic.append(img);
   }
+  const eq = el("span", "sps-eq");
+  eq.append(el("i"), el("i"), el("i"));
+  pic.append(eq, iconEl("play", 16));
   const txt = el("div", "spw-t-txt");
   txt.append(el("div", "spw-t-name", t.name), el("div", "spw-t-artist", t.artist));
-  const play = el("button", "mini-icon");
-  play.type = "button";
-  play.title = "Écouter";
-  play.append(iconEl("play", 13));
-  play.onclick = () => api("/api/spotify/track", { method: "POST", body: { uri: t.uri } }).then(() => setTimeout(refreshMusic, 800), (e) => toast(e.message, true));
-  const add = el("button", "mini-icon");
+  const play = () => {
+    onUse?.();
+    api("/api/spotify/track", { method: "POST", body: { uri: t.uri } }).then(() => setTimeout(refreshMusic, 800), (e) => toast(e.message, true));
+  };
+  pic.onclick = play;
+  txt.onclick = play;
+  const add = el("button", "sps-add");
   add.type = "button";
   add.title = "Ajouter à une playlist";
-  add.append(iconEl("plus", 13));
-  add.onclick = () => togglePlaylistPicker(li, t);
-  row.append(pic, txt, el("span", "spw-t-dur", fmtDuration(t.duration)), play, add);
+  add.append(iconEl("plus", 15));
+  add.onclick = () => (onUse?.(), togglePlaylistPicker(li, t));
+  row.append(pic, txt, el("span", "spw-t-dur", fmtDuration(t.duration)), add);
   li.append(row);
   return li;
 }
@@ -577,14 +619,24 @@ function renderMailWidget(body) {
   if (r.error) return ul.append(emptyLi(r.error));
   if (!r.data.length) return ul.append(emptyLi("Boîte de réception à jour."));
   for (const m of r.data) {
-    const li = el("li", "clickable mail-item");
+    const name = senderName(m.from);
+    const li = el("li", "mail-item");
     const d = new Date(m.date);
     const when = isNaN(d) ? "" : d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    const av = el("div", "mail-av", (name.match(/[\p{L}\p{N}]/u)?.[0] || "?").toUpperCase());
+    av.style.setProperty("--h", [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7));
     const top = el("div", "mail-top");
-    top.append(el("span", "t", senderName(m.from)), el("span", "when", when));
-    li.append(top, el("div", "mail-subject", m.subject), el("div", "s", m.snippet));
+    top.append(el("span", "mail-from", name), el("span", "mail-when", when));
+    const main = el("div", "mail-main");
+    main.append(top, el("div", "mail-subject", m.subject || "(sans objet)"), el("div", "mail-snip", m.snippet));
+    const open = el("button", "mail-open");
+    open.type = "button";
+    open.title = "Ouvrir dans Gmail";
+    open.append(iconEl("external", 14));
+    open.onclick = (e) => (e.stopPropagation(), openExternal(`https://mail.google.com/mail/u/0/#inbox/${m.id}`));
+    li.append(av, main, open);
     li.title = "Clique pour que Jarvis le résume";
-    li.onclick = () => (goTo(0), send(`Résume-moi le mail de ${senderName(m.from)} intitulé "${m.subject}" (id ${m.id}).`));
+    li.onclick = () => (goTo(0), send(`Résume-moi le mail de ${name} intitulé "${m.subject}" (id ${m.id}).`));
     ul.append(li);
   }
 }
@@ -742,6 +794,53 @@ hooks.status.push(() => {
   if (d?.ok && !discordState.channels && !discordState.loading) loadDiscord();
 });
 
+// Texte Discord lisible : **gras**, liens [texte](adresse), mentions et émojis personnalisés simplifiés.
+function dcRich(text, cls) {
+  const box = el("div", cls);
+  const clean = String(text || "")
+    .replace(/<a?:(\w+):\d+>/g, ":$1:")
+    .replace(/<@[!&]?\d+>/g, "@membre")
+    .replace(/<#\d+>/g, "#salon")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, "$1");
+  for (const part of clean.split(/(\*\*[^*]+\*\*)/)) {
+    if (/^\*\*[^*]+\*\*$/.test(part)) box.append(el("strong", null, part.slice(2, -2)));
+    else if (part) box.append(document.createTextNode(part.replace(/__|~~|`/g, "")));
+  }
+  return box;
+}
+
+// Contenu intégré (carte colorée comme dans Discord).
+function dcEmbed(e) {
+  const box = el("div", "dc-embed");
+  if (e.color) box.style.setProperty("--ec", e.color);
+  if (e.author) box.append(el("div", "dc-e-author", e.author));
+  if (e.title) {
+    const title = dcRich(e.title, "dc-e-title" + (e.url ? " link" : ""));
+    if (e.url) title.onclick = () => openExternal(e.url);
+    box.append(title);
+  }
+  if (e.description) box.append(dcRich(e.description, "dc-e-desc"));
+  if (e.fields?.length) {
+    const grid = el("div", "dc-e-fields");
+    for (const f of e.fields) {
+      const c = el("div", "dc-e-field" + (f.inline ? " inline" : ""));
+      c.append(el("div", "dc-e-name", f.name), dcRich(f.value, "dc-e-val"));
+      grid.append(c);
+    }
+    box.append(grid);
+  }
+  if (e.image) {
+    const img = el("img", "dc-e-img");
+    img.src = e.image;
+    img.alt = "";
+    img.loading = "lazy";
+    img.onclick = () => openViewer([{ src: e.image, caption: e.title || "", link: e.url || e.image }], 0);
+    box.append(img);
+  }
+  if (e.footer) box.append(el("div", "dc-e-foot", e.footer));
+  return box;
+}
+
 function renderDiscordWidget(body) {
   const d = state.status?.discord;
   const note = (text, linkLabel, href) => {
@@ -824,21 +923,55 @@ function renderDiscordWidget(body) {
   list.replaceChildren();
   if (discordState.error) list.append(emptyLi(discordState.error));
   else if (!discordState.messages.length) list.append(emptyLi("Aucun message récent."));
+  let prev = null;
   for (const m of discordState.messages) {
-    const li = el("li");
-    li.className = "dc-msg" + (discordState.seen && !discordState.seen.has(m.id) ? " fresh" : "");
+    const at = new Date(m.at);
+    const grouped = prev && prev.author === m.author && at - new Date(prev.at) < 5 * 60_000;
+    const li = el("li", "dc-msg" + (grouped ? " grouped" : "") + (discordState.seen && !discordState.seen.has(m.id) ? " fresh" : ""));
     const av = el("div", "dc-avatar");
-    if (m.avatar) {
+    if (!grouped && m.avatar) {
       const img = el("img");
       img.src = m.avatar;
       img.alt = "";
       img.loading = "lazy";
       av.append(img);
-    } else av.textContent = m.author.slice(0, 1).toUpperCase();
-    const txt = el("div", "dc-body");
-    txt.append(el("div", "when", `${m.author}${m.bot ? " (bot)" : ""} · ${new Date(m.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`), el("div", "dc-text", m.content || "(vide)"));
-    li.append(av, txt);
+    } else if (!grouped) av.textContent = m.author.slice(0, 1).toUpperCase();
+    const main = el("div", "dc-main");
+    if (!grouped) {
+      const head = el("div", "dc-head");
+      head.append(el("b", null, m.author));
+      if (m.bot) head.append(el("span", "dc-bot", "BOT"));
+      head.append(el("time", null, at.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })));
+      main.append(head);
+    }
+    if (m.content) main.append(dcRich(m.content, "dc-text"));
+    for (const e of m.embeds || []) main.append(dcEmbed(e));
+    const files = m.attachments || [];
+    const pics = files.filter((f) => f.image);
+    if (files.length) {
+      const row = el("div", "dc-files");
+      for (const f of files) {
+        if (f.image) {
+          const img = el("img", "dc-file-img");
+          img.src = f.url;
+          img.alt = f.name;
+          img.loading = "lazy";
+          img.onclick = () => openViewer(pics.map((x) => ({ src: x.url, caption: x.name, link: x.url })), pics.indexOf(f));
+          row.append(img);
+        } else {
+          const b = el("button", "dc-file");
+          b.type = "button";
+          b.append(iconEl("paperclip", 13), el("span", null, f.name));
+          b.onclick = () => openExternal(f.url);
+          row.append(b);
+        }
+      }
+      main.append(row);
+    }
+    if (!m.content && !(m.embeds || []).length && !files.length) main.append(el("div", "dc-text muted", "(message vide)"));
+    li.append(av, main);
     list.append(li);
+    prev = m;
   }
   discordState.seen = new Set(discordState.messages.map((m) => m.id));
   if (atBottom || !list.dataset.seen) list.scrollTop = list.scrollHeight;

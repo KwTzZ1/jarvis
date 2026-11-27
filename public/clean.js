@@ -16,7 +16,16 @@
   document.addEventListener("pointerdown", (e) => {
     if (document.body.classList.contains("drawer-open") && !e.target.closest("#drawer, #drawerBtn, .gl-item")) closeDrawer();
   });
-  new MutationObserver(closeDrawer).observe(document.body, { attributes: true, attributeFilter: ["data-page"] });
+  let enterTimer;
+  new MutationObserver(() => {
+    closeDrawer();
+    // Ouverture de la page Widgets : les cartes arrivent en cascade.
+    if (document.body.dataset.page === "1" && !document.body.classList.contains("w-enter")) {
+      document.body.classList.add("w-enter");
+      clearTimeout(enterTimer);
+      enterTimer = setTimeout(() => document.body.classList.remove("w-enter"), 900);
+    }
+  }).observe(document.body, { attributes: true, attributeFilter: ["data-page"] });
 
   // ---------- Mode conversation ----------
   // Au repos : grande sphère, l'heure, et seulement la dernière réponse en sous-titre.

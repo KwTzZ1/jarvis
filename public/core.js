@@ -30,7 +30,7 @@
       (x /= l), (y /= l), (z /= l);
     }
     const r = 1 - Math.random() ** 2.5 * 0.16; // presque tous en surface, quelques-uns à l'intérieur
-    pts.push({ x: x * r, y: y * r, z: z * r, k: Math.random() * 6.283, sx: 0, sy: 0, z2: 0, deg: 0 });
+    pts.push({ x: x * r, y: y * r, z: z * r, k: Math.random() * 6.283, sx: 0, sy: 0, z2: 0, deg: 0, g: 1, sp: Math.random() ** 3, f: 7 + Math.random() * 9 });
   }
   // Liaisons : chaque point vers ses voisins proches (6 au plus), plus quelques longues lignes.
   const links = [];
@@ -63,7 +63,7 @@
   let W = 0, H = 0, R = 0;
   function resize() {
     // Taille réelle (sans le zoom de la mini-sphère), pour garder un dessin net.
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
     W = canvas.clientWidth;
     H = canvas.clientHeight;
     canvas.width = Math.round(W * dpr);
@@ -83,7 +83,8 @@
   };
   const isMini = () => !!document.body.dataset.page && document.body.dataset.page !== "0";
 
-  let energy = 0.2, spin = 0, color = [95, 195, 255], skip = false, frameNo = 0, lastRgb = "";
+  let energy = 0.2, spin = 0, color = [95, 195, 255], skip = false, frameNo = 0, lastRgb = "", lvl = 0, emitA = 0;
+  const tips = [];
   const buf = new Uint8Array(128);
   function voiceLevel() {
     const an = window.jarvisCore.analyser;
@@ -91,7 +92,7 @@
     an.getByteTimeDomainData(buf);
     let sum = 0;
     for (let i = 0; i < buf.length; i++) sum += (buf[i] - 128) ** 2;
-    return Math.min(1, Math.sqrt(sum / buf.length) / 40);
+    return Math.min(1, Math.sqrt(sum / buf.length) / 30);
   }
 
   const bins = [[], [], [], []];
@@ -102,15 +103,19 @@
     if (canvas.clientWidth !== W || canvas.clientHeight !== H) resize(); // filet si l'observateur n'a rien vu
     if (document.hidden || !W) return setTimeout(() => requestAnimationFrame(frame), 400);
     const mini = isMini();
-    if (mini && (skip = !skip)) return requestAnimationFrame(frame); // en mini : une image sur deux
-    const t = now / 1000;
     const m = mode();
+    // Au repos ou en mini, une image sur deux suffit (moitié moins de calcul) ; pleine vitesse quand il parle, écoute ou réfléchit.
+    if ((mini || m === "idle" || m === "offline") && (skip = !skip)) return requestAnimationFrame(frame);
+    const t = now / 1000;
     const level = voiceLevel();
+    // Volume de la voix, lissé : monte vite, redescend doucement. Sans analyse du son : rythme de parole simulé.
+    const raw = m === "speaking" ? level ?? Math.max(0, Math.sin(t * 9.1) * Math.sin(t * 3.7 + 1)) ** 0.7 * (0.65 + 0.35 * Math.sin(t * 1.3)) : 0;
+    lvl = raw > lvl ? lvl + (raw - lvl) * 0.5 : lvl * 0.9;
     const target = {
       idle: 0.18 + 0.05 * Math.sin(t * 1.3),
       listening: 0.6,
       thinking: 0.42,
-      speaking: 0.35 + (level ?? 0.25 + 0.25 * Math.abs(Math.sin(t * 9) * Math.sin(t * 4.3))) * 0.65,
+      speaking: 0.35 + lvl * 0.65,
       offline: 0.05,
     }[m];
     energy += (target - energy) * 0.1;
@@ -137,18 +142,39 @@
     const cosY = Math.cos(spin), sinY = Math.sin(spin);
     const tilt = 0.3 + Math.sin(t * 0.21) * 0.12;
     const cosX = Math.cos(tilt), sinX = Math.sin(tilt);
-    const amp = m === "speaking" ? 0.05 + energy * 0.22 : m === "listening" ? 0.08 : 0.04;
-    const tt = t * (m === "speaking" ? 2.6 : m === "thinking" ? 1.5 : 0.6);
-    const jit = m === "speaking" ? energy * 0.04 : 0.004;
+    const amp = m === "speaking" ? 0.04 + energy * 0.08 : m === "listening" ? 0.08 : 0.04;
+    const tt = t * (m === "speaking" ? 2 : m === "thinking" ? 1.5 : 0.6);
+    // Pics de la voix : une zone du contour (qui tourne doucement) lance des pointes au rythme de la voix,
+    // une seconde zone, à l'opposé, répond plus faiblement.
+    emitA += 0.004 + lvl * 0.02;
+    const e1x = Math.cos(emitA) * 0.958, e1y = Math.sin(emitA) * 0.958, e1z = 0.287;
+    const e2x = Math.cos(emitA + 2.7) * 0.98, e2y = Math.sin(emitA + 2.7) * 0.98, e2z = 0.196;
+    const rays = lvl > 0.03 ? new Path2D() : null;
     for (const p of pts) {
       const n = Math.sin(p.x * 2.1 + tt) * Math.sin(p.y * 2.7 - tt * 0.8) * Math.sin(p.z * 1.9 + tt * 1.3) + 0.45 * Math.sin(p.x * 4.6 - tt * 1.6) * Math.sin(p.z * 4.1 + tt * 1.1);
-      const d = 1 + amp * n + jit * Math.sin(p.k + t * 11);
+      const d = 1 + amp * n + 0.004 * Math.sin(p.k + t * 11);
       const px = p.x * d, py = p.y * d, pz = p.z * d;
       const x1 = px * cosY - pz * sinY;
       const z1 = px * sinY + pz * cosY;
-      p.sx = cx + x1 * rad;
-      p.sy = cy + (py * cosX - z1 * sinX) * rad;
-      p.z2 = py * sinX + z1 * cosX;
+      const y2 = py * cosX - z1 * sinX;
+      const z2 = py * sinX + z1 * cosX;
+      let g = 1;
+      if (rays) {
+        const i1 = Math.max(0, (x1 * e1x + y2 * e1y + z2 * e1z - 0.5) * 2);
+        const i2 = Math.max(0, (x1 * e2x + y2 * e2y + z2 * e2z - 0.6) * 2.5);
+        const inf = i1 * i1 + 0.5 * i2 * i2;
+        if (inf > 0) {
+          g += lvl * inf * (0.12 + p.sp * 0.95) * (0.55 + 0.45 * Math.sin(t * p.f + p.k));
+          if (g > 1.12) {
+            rays.moveTo(cx + x1 * rad, cy + y2 * rad);
+            rays.lineTo(cx + x1 * g * rad, cy + y2 * g * rad);
+          }
+        }
+      }
+      p.sx = cx + x1 * g * rad;
+      p.sy = cy + y2 * g * rad;
+      p.z2 = z2;
+      p.g = g;
     }
     // Liaisons en trois couches (arrière, milieu, avant) pour la profondeur.
     const layers = [new Path2D(), new Path2D(), new Path2D()];
@@ -168,10 +194,12 @@
     });
     // Nœuds : plus brillants devant et là où le réseau est dense.
     for (const b of bins) b.length = 0;
+    tips.length = 0;
     for (const p of pts) {
       const depth = Math.max(0, Math.min(1, (p.z2 + 1) / 2));
       const lum = depth * 0.8 + Math.min(p.deg, 10) * 0.02;
       bins[lum > 0.75 ? 3 : lum > 0.5 ? 2 : lum > 0.28 ? 1 : 0].push(p.sx, p.sy);
+      if (p.g > 1.15) tips.push(p.sx, p.sy);
     }
     const light = `${Math.min(255, cr + 110)},${Math.min(255, cg + 60)},255`;
     bins.forEach((b, i) => {
@@ -179,6 +207,14 @@
       const s = SIZE[i];
       for (let j = 0; j < b.length; j += 2) ctx.fillRect(b[j] - s / 2, b[j + 1] - s / 2, s, s);
     });
+    // Pointes : aiguilles lumineuses et têtes brillantes.
+    if (rays) {
+      ctx.strokeStyle = `rgba(${light},${0.3 + lvl * 0.6})`;
+      ctx.lineWidth = 1;
+      ctx.stroke(rays);
+      ctx.fillStyle = `rgba(${light},.95)`;
+      for (let j = 0; j < tips.length; j += 2) ctx.fillRect(tips[j] - 1.7, tips[j + 1] - 1.7, 3.4, 3.4);
+    }
 
     // Étincelles (plus rapides quand il parle ou écoute).
     ctx.lineWidth = 1;
@@ -187,7 +223,10 @@
     const speed = 1 + energy * 4;
     for (const d of dust) {
       d.r += d.v * speed;
-      if (d.r > 2.4) newDust(d).r = 1.02;
+      if (d.r > 2.4) {
+        newDust(d).r = 1.02;
+        if (lvl > 0.1) d.a = emitA + (Math.random() - 0.5) * 1.3;
+      }
       if (d.r > 1.9) continue;
       const r1 = rad * d.r, r2 = rad * (d.r + d.len * (0.6 + energy));
       ctx.moveTo(cx + Math.cos(d.a) * r1, cy + Math.sin(d.a) * r1);
@@ -223,7 +262,7 @@
   orb.className = "orb";
   orb.append(...slot.childNodes);
   document.body.append(orb);
-  const MINI = 92;
+  const MINI = 78;
   const page0 = document.getElementById("pageAssistant");
   // Taille fixe : la sphère grandit, rétrécit ou file en bas à droite par une simple transformation (fluide).
   const BASE = 440;
@@ -234,7 +273,7 @@
     const mini = isMini();
     document.body.classList.toggle("orb-mini", mini);
     if (!mini) orb.style.transform = `translate(${sr.left - pr.left}px, ${sr.top}px) scale(${sr.width / BASE})`;
-    else orb.style.transform = `translate(${innerWidth - MINI - 26}px, ${innerHeight - MINI - 26}px) scale(${MINI / BASE})`;
+    else orb.style.transform = `translate(${innerWidth - MINI - 18}px, ${innerHeight - MINI - 18}px) scale(${MINI / BASE})`;
     orb.title = mini ? "Retour à l'assistant" : "Clique pour parler";
     drawLinks();
   }

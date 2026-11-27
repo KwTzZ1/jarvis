@@ -1122,6 +1122,7 @@ function speak(text, force = false) {
     idleMode();
   };
   if (usePiper()) return speakPiper(parts.map((p) => p.trim()).filter(Boolean), id, done);
+  if (window.jarvisCore) window.jarvisCore.analyser = null; // voix du navigateur : la sphère simule le rythme
   // Petit délai : Chrome ignore parfois une lecture lancée juste après cancel().
   setTimeout(() => {
     if (id !== speakId) return;
