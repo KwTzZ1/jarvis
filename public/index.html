@@ -100,15 +100,16 @@
 
   <!-- Réglages -->
   <div class="modal-bg" id="settings" hidden>
-    <form class="modal" id="settingsForm">
+    <form class="modal" id="settingsForm" autocomplete="off" novalidate>
       <div class="modal-head">
         <h3><i data-icon="settings" data-size="16"></i>Réglages</h3>
         <button type="button" class="icon-btn" id="settingsClose" title="Fermer"><i data-icon="x"></i></button>
       </div>
       <div class="modal-body" id="settingsFields"></div>
+      <div class="form-error" id="settingsError" role="alert" hidden></div>
       <div class="modal-foot">
         <span class="hint">Tout reste enregistré sur ton PC. Le guide pour obtenir les clés est dans le README.</span>
-        <button class="btn" type="submit">Enregistrer</button>
+        <button class="btn" type="submit" id="settingsSave">Enregistrer</button>
       </div>
     </form>
   </div>

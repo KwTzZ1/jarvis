@@ -47,5 +47,6 @@ if ($Demarrage) {
 }
 
 Write-Host ''
-Write-Host '  Terminé ! Lance Jarvis depuis le raccourci du Bureau.' -ForegroundColor Green
+Write-Host '  Terminé ! Jarvis démarre. Ensuite, lance-le depuis le raccourci du Bureau.' -ForegroundColor Green
 Write-Host ''
+Start-Process "$env:WINDIR\System32\wscript.exe" -ArgumentList ('"' + (Join-Path $PSScriptRoot 'Jarvis.vbs') + '"')
