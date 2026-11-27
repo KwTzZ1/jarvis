@@ -590,6 +590,7 @@ function scrollChat() {
 function addMsg(role, text, extraClass = "") {
   const m = el("div", `msg ${role} ${extraClass}`.trim(), text);
   if (role === "bot") m.dataset.name = state.name.toUpperCase();
+  m.dataset.time = new Date().toLocaleTimeString("fr-FR"); // horodatage façon console
   $("#chat").append(m);
   scrollChat();
   return m;

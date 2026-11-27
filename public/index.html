@@ -72,15 +72,28 @@
 
     <!-- Centre -->
     <section class="center">
-      <div class="core-wrap">
-        <svg class="hud-rings" viewBox="0 0 200 200" aria-hidden="true">
-          <circle class="hr hr1" cx="100" cy="100" r="96" />
-          <circle class="hr hr2" cx="100" cy="100" r="90" />
-          <circle class="hr hr3" cx="100" cy="100" r="84" />
-        </svg>
-        <div class="reactor" id="reactor" title="Clique pour parler">
-          <canvas id="coreCanvas"></canvas>
-          <div class="core-label" id="coreLabel">JARVIS</div>
+      <div class="core-stage">
+        <svg class="core-links" aria-hidden="true"></svg>
+        <div class="gauge g-tl" data-k="cpu"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>CPU</span></div>
+        <div class="gauge g-bl" data-k="ram"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>MÉMOIRE</span></div>
+        <div class="gauge g-tr" data-k="disk"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>DISQUE</span></div>
+        <div class="gauge g-br" data-k="up"><svg viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="27" pathLength="100" /><circle class="g-val" cx="32" cy="32" r="27" pathLength="100" /></svg><div class="g-txt"><b>--</b></div><span>EN LIGNE</span></div>
+        <div class="core-wrap">
+          <svg class="hud-rings" viewBox="0 0 200 200" aria-hidden="true">
+            <circle class="hr hr1" cx="100" cy="100" r="99" />
+            <circle class="hr-ticks" cx="100" cy="100" r="93.5" pathLength="60" />
+            <circle class="hr-sec" id="hudSec" cx="100" cy="100" r="93.5" pathLength="60" />
+            <circle class="hr hr2" cx="100" cy="100" r="88" />
+            <circle class="hr hr3" cx="100" cy="100" r="84" />
+            <g class="hr-arcs">
+              <path class="hr-arc" d="M190.07 48 A104 104 0 0 1 190.07 152" />
+              <path class="hr-arc" d="M9.93 152 A104 104 0 0 1 9.93 48" />
+            </g>
+          </svg>
+          <div class="reactor" id="reactor" title="Clique pour parler">
+            <canvas id="coreCanvas"></canvas>
+            <div class="core-label" id="coreLabel">JARVIS</div>
+          </div>
         </div>
       </div>
       <div class="core-clock"><span id="bigTime">--:--</span><span id="bigDate"></span></div>
@@ -100,7 +113,7 @@
         <button type="button" class="mic" id="micBtn" title="Parler (ou maintiens Espace)"><i data-icon="mic" data-size="20"></i></button>
         <button type="button" class="mic" id="attachBtn" title="Joindre une image (ou colle-la avec Ctrl+V, ou glisse-la ici)"><i data-icon="paperclip" data-size="19"></i></button>
         <input type="file" id="attachInput" accept="image/*" multiple hidden />
-        <input id="input" autocomplete="off" placeholder="Parle-moi ou écris ici…" />
+        <input id="input" autocomplete="off" placeholder="Commande ou question…" />
         <button type="submit" class="send" title="Envoyer"><i data-icon="arrow-up" data-size="20"></i></button>
       </form>
     </section>
